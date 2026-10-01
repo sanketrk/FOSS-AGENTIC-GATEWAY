@@ -8,6 +8,7 @@ data:
   kong.yml: |
     _format_version: "3.0"
     _transform: true
+
     services:
       - name: mcp-upstream
         url: http://mcp-server.default.svc.cluster.local:3000
@@ -19,9 +20,9 @@ data:
         routes:
           - name: mcp-streamable-http
             paths:
-              - /mcp
-              - /.well-known/oauth-protected-resource
-              - /.well-known/oauth-protected-resource/mcp
+              - "~^/mcp$"
+              - "~^/.well-known/oauth-protected-resource$"
+              - "~^/.well-known/oauth-protected-resource/mcp$"
             strip_path: false
             preserve_host: false
             request_buffering: false
@@ -49,6 +50,86 @@ data:
                   allowed_origins: []
                   required_scopes:
                     - mcp:access
+
+      - name: mcp-server-a
+        url: http://mcp-server-a.default.svc.cluster.local:3000/mcp
+        protocol: http
+        connect_timeout: 5000
+        write_timeout: 3600000
+        read_timeout: 3600000
+        retries: 0
+        routes:
+          - name: mcp-server-a-http
+            paths:
+              - "~^/mcp/server-a$"
+              - "~^/.well-known/oauth-protected-resource/mcp/server-a$"
+            strip_path: true
+            path_handling: v0
+            preserve_host: false
+            request_buffering: false
+            response_buffering: false
+            plugins:
+              - name: mcp-gateway
+                config:
+                  resource_url: https://mcp.example.com/mcp/server-a
+                  resource_metadata_url: https://mcp.example.com/.well-known/oauth-protected-resource/mcp/server-a
+                  metadata_paths:
+                    - /.well-known/oauth-protected-resource/mcp/server-a
+                  authorization_servers:
+                    - issuer: https://issuer.example.com/
+                      discovery_url: https://issuer.example.com/.well-known/openid-configuration
+                  legacy_protocol_versions:
+                    - "2025-11-25"
+                    - "2025-03-26"
+                  audience: mcp-server-a
+                  scopes_supported:
+                    - mcp:server-a:access
+                  forward_bearer_token: false
+                  signing_algorithms:
+                    - RS256
+                  allowed_origins: []
+                  required_scopes:
+                    - mcp:server-a:access
+
+      - name: mcp-server-b
+        url: http://mcp-server-b.default.svc.cluster.local:3000/mcp
+        protocol: http
+        connect_timeout: 5000
+        write_timeout: 3600000
+        read_timeout: 3600000
+        retries: 0
+        routes:
+          - name: mcp-server-b-http
+            paths:
+              - "~^/mcp/server-b$"
+              - "~^/.well-known/oauth-protected-resource/mcp/server-b$"
+            strip_path: true
+            path_handling: v0
+            preserve_host: false
+            request_buffering: false
+            response_buffering: false
+            plugins:
+              - name: mcp-gateway
+                config:
+                  resource_url: https://mcp.example.com/mcp/server-b
+                  resource_metadata_url: https://mcp.example.com/.well-known/oauth-protected-resource/mcp/server-b
+                  metadata_paths:
+                    - /.well-known/oauth-protected-resource/mcp/server-b
+                  authorization_servers:
+                    - issuer: https://issuer.example.com/
+                      discovery_url: https://issuer.example.com/.well-known/openid-configuration
+                  legacy_protocol_versions:
+                    - "2025-11-25"
+                    - "2025-03-26"
+                  audience: mcp-server-b
+                  scopes_supported:
+                    - mcp:server-b:access
+                  forward_bearer_token: false
+                  signing_algorithms:
+                    - RS256
+                  allowed_origins: []
+                  required_scopes:
+                    - mcp:server-b:access
   nginx-extra.conf: |
     lua_shared_dict discovery 5m;
     lua_shared_dict jwks 5m;

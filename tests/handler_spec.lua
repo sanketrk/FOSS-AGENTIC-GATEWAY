@@ -528,4 +528,26 @@ test("scope and audience restrictions still apply", function()
   current_claims = { iss = "https://issuer.example.com/", aud = "mcp-gateway", scope = "mcp:access" }
 end)
 
+test("per-server audiences and scopes reject tokens for another server", function()
+  local original = config
+  config = {}
+  for key, value in pairs(original) do config[key] = value end
+  config.audience = "mcp-server-b"
+  config.required_scopes = { "mcp:server-b:access" }
+  config.resource_url = "https://mcp.example.com/mcp/server-b"
+  config.resource_metadata_url = "https://mcp.example.com/.well-known/oauth-protected-resource/mcp/server-b"
+  config.metadata_paths = { "/.well-known/oauth-protected-resource/mcp/server-b" }
+
+  current_claims = { iss = "https://issuer.example.com/", aud = "mcp-server-a", scope = "mcp:server-a:access" }
+  expect_status("server A token at server B", 401)
+  assert(state.response.headers["WWW-Authenticate"]:find(config.resource_metadata_url, 1, true))
+  current_claims = { iss = "https://issuer.example.com/", aud = "mcp-server-b", scope = "mcp:server-a:access" }
+  expect_status("server B audience without server B scope", 403)
+  current_claims = { iss = "https://issuer.example.com/", aud = "mcp-server-b", scope = "mcp:server-b:access" }
+  request()
+  assert(not state.response, "matching server policy should permit proxying")
+  config = original
+  current_claims = { iss = "https://issuer.example.com/", aud = "mcp-gateway", scope = "mcp:access" }
+end)
+
 io.write("1..", passed, "\n")

@@ -13,48 +13,53 @@ def assert(condition, message)
   raise message unless condition
 end
 
-route_for = lambda do |config|
-  service = config.fetch("services").find { |entry| entry.fetch("name") == "mcp-upstream" }
-  assert(service, "MCP upstream service is missing")
-  route = service.fetch("routes").find { |entry| entry.fetch("name") == "mcp-streamable-http" }
-  assert(route, "Streamable HTTP route is missing")
-  [service, route]
+assert(kong == embedded_kong, "OpenShift embedded Kong config differs from kong/kong.yml")
+services = kong.fetch("services")
+assert(services.length >= 3, "sample must include default and two named MCP services")
+seen_paths = {}
+seen_resources = {}
+seen_audiences = {}
+services.each do |service|
+  service.fetch("routes").each do |route|
+    assert(!route.key?("methods"), "plugin must receive unsupported methods to return 405")
+    assert(route.fetch("request_buffering") == false, "request buffering must be disabled")
+    assert(route.fetch("response_buffering") == false, "response buffering must be disabled")
+    assert(service.fetch("retries") == 0, "non-idempotent MCP requests must not be retried")
+    config = route.fetch("plugins").find { |plugin| plugin.fetch("name") == "mcp-gateway" }.fetch("config")
+    resource = URI.parse(config.fetch("resource_url"))
+    metadata = URI.parse(config.fetch("resource_metadata_url"))
+    assert(resource.scheme == "https" && metadata.scheme == "https", "public resource URLs must use HTTPS")
+    assert(!seen_resources[resource.to_s], "resource must be unique per service")
+    assert(!seen_audiences[config.fetch("audience")], "sample audiences must isolate services")
+    seen_resources[resource.to_s] = true
+    seen_audiences[config.fetch("audience")] = true
+    assert(config.fetch("metadata_paths").include?(metadata.path), "resource metadata URL must reach its handler")
+    expected_paths = [resource.path] + config.fetch("metadata_paths")
+    assert(route.fetch("paths").sort == expected_paths.map { |path| "~^#{path}$" }.sort,
+      "routes must match exactly their resource and metadata paths")
+    expected_paths.each do |path|
+      assert(!seen_paths[path], "path #{path} belongs to multiple services")
+      seen_paths[path] = true
+    end
+    if service.fetch("name") != "mcp-upstream"
+      assert(route.fetch("strip_path") && route.fetch("path_handling") == "v0", "named services must strip public route paths")
+      assert(URI.parse(service.fetch("url")).path == "/mcp", "named backends must receive /mcp")
+    end
+    assert(config.fetch("forward_bearer_token") == false, "bearer token forwarding must be opt-in")
+    assert(config.fetch("signing_algorithms") == ["RS256"], "JWT algorithm must remain explicit")
+    assert(config.fetch("required_scopes").all? { |scope| config.fetch("scopes_supported").include?(scope) },
+      "required scopes must be advertised")
+    assert(config.fetch("legacy_protocol_versions") == ["2025-11-25", "2025-03-26"], "legacy revisions must be explicit strings")
+    assert(config.fetch("authorization_servers").any?, "at least one IdP must be advertised")
+    config.fetch("authorization_servers").each do |server|
+      assert(URI.parse(server.fetch("issuer")).scheme == "https", "issuer must use HTTPS")
+      assert(URI.parse(server.fetch("discovery_url")).scheme == "https", "discovery URL must use HTTPS")
+    end
+  end
 end
-
-service, route = route_for.call(kong)
-embedded_service, embedded_route = route_for.call(embedded_kong)
-assert(service == embedded_service, "OpenShift embedded Kong service differs from kong/kong.yml")
-assert(route == embedded_route, "OpenShift embedded Kong route differs from kong/kong.yml")
-assert(route.fetch("paths").include?("/mcp"), "MCP endpoint path must be /mcp")
-assert(route.fetch("paths").include?("/.well-known/oauth-protected-resource"),
-  "root protected-resource metadata path must be routed")
-assert(route.fetch("paths").include?("/.well-known/oauth-protected-resource/mcp"),
-  "path-specific protected-resource metadata must be routed")
-assert(!route.key?("methods"), "plugin must receive unsupported methods to return 405")
-assert(route.fetch("request_buffering") == false, "request buffering must be disabled")
-assert(route.fetch("response_buffering") == false, "response buffering must be disabled")
-assert(service.fetch("retries") == 0, "non-idempotent MCP requests must not be retried")
-
-plugin_config = route.fetch("plugins").find { |plugin| plugin.fetch("name") == "mcp-gateway" }.fetch("config")
-assert(plugin_config.fetch("forward_bearer_token") == false, "bearer token forwarding must be opt-in")
-assert(plugin_config.fetch("signing_algorithms") == ["RS256"], "JWT algorithm default must remain explicit")
-assert(plugin_config.fetch("required_scopes").all? { |scope| plugin_config.fetch("scopes_supported").include?(scope) },
-  "all required scopes must be represented in advertised scopes")
-assert(plugin_config.fetch("legacy_protocol_versions") == ["2025-11-25", "2025-03-26"],
-  "legacy protocol versions must remain explicit YAML strings and match supported revisions")
-assert(plugin_config.fetch("resource_url").start_with?("https://"), "protected resource URL must use HTTPS")
-assert(plugin_config.fetch("resource_metadata_url").start_with?("https://"),
-  "protected-resource metadata URL must use HTTPS")
-metadata_uri = URI.parse(plugin_config.fetch("resource_metadata_url"))
-assert(plugin_config.fetch("metadata_paths").include?(metadata_uri.path),
-  "path-specific resource metadata URL must be routed to the metadata handler")
-assert(plugin_config.fetch("metadata_paths").include?("/.well-known/oauth-protected-resource"),
-  "root resource metadata endpoint must be configured")
-assert(plugin_config.fetch("authorization_servers").any?, "at least one IdP must be advertised")
-plugin_config.fetch("authorization_servers").each do |authorization_server|
-  assert(authorization_server.fetch("issuer").start_with?("https://"), "authorization issuer must use HTTPS")
-  assert(authorization_server.fetch("discovery_url").start_with?("https://"),
-    "authorization server discovery URL must use HTTPS")
+assert(seen_paths["/.well-known/oauth-protected-resource"], "default root metadata must remain available")
+%w[server-a server-b].each do |name|
+  assert(seen_paths["/mcp/#{name}"], "missing named MCP endpoint #{name}")
 end
 
 expected_dicts = [

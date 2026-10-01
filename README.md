@@ -17,11 +17,40 @@ This is a **transport-aware gateway, not a complete MCP server or protocol imple
 - SSE-friendly upstream timeouts, buffering disabled, and retries disabled to avoid replaying non-idempotent MCP requests.
 - No Admin API listener; declarative configuration; non-root/read-only-rootfs OpenShift deployment.
 
+## Central enterprise gateway
+
+Agents connect to one public gateway host and select a registered server endpoint. Each server executes its own MCP methods and owns its session lifecycle. Kong routes requests and enforces each endpoint's OAuth policy.
+
+| Agent endpoint | Sample internal server | Token audience | Required scope |
+| --- | --- | --- | --- |
+| `/mcp` | `mcp-server:3000` (path preserved) | `mcp-gateway` | `mcp:access` |
+| `/mcp/server-a` | `mcp-server-a:3000/mcp` | `mcp-server-a` | `mcp:server-a:access` |
+| `/mcp/server-b` | `mcp-server-b:3000/mcp` | `mcp-server-b` | `mcp:server-b:access` |
+
+These are generic placeholders. The `services` list in `kong/kong.yml` is the declarative server registry. Add a service and route for each actual MCP server, with its upstream URL and independent plugin configuration. Update the embedded configuration in `deploy/openshift/kong-config.yaml` to match; validation checks both copies. Registry changes require a controlled configuration rollout; there is no runtime registration API.
+
+Configure agents with the public endpoint(s) they may access, never the backend URL. The identity provider must issue tokens with the endpoint's configured audience and scopes. A token for server A is rejected at server B unless it explicitly satisfies server B's policy. Policies govern access to a whole server; tool-level authorization remains the upstream's responsibility.
+
+Each endpoint has its own `/.well-known/oauth-protected-resource/mcp/<server>` metadata URL. The root metadata endpoint describes only the default `/mcp` resource, not a catalog of all servers. The gateway does not aggregate tools or dynamically discover backends.
+
+Routes use exact regex paths so unregistered names, suffixes, and trailing slashes return 404 instead of reaching the default server. Named routes strip their public path and use the service URL's `/mcp` backend path. Set that URL path to the actual backend endpoint. See [Kong route path handling](https://developer.konghq.com/gateway/entities/route/).
+
+At deployment, restrict MCP backend ingress to the gateway using your network controls. Hosting a gateway alone does not prevent agents from connecting directly to accessible backends. This baseline does not yet include centralized audit records, metrics export, rate-limit policies, upstream health checks, or validated backend failover; configure and test these before treating it as production enterprise infrastructure.
+
+To smoke-test a named server with a correctly scoped token:
+
+```sh
+GATEWAY_URL=https://mcp.company.com \
+MCP_PATH=/mcp/server-a \
+ACCESS_TOKEN="$ACCESS_TOKEN" \
+sh tests/smoke.sh
+```
+
 ## Configure
 
 Before building or deploying, edit the declarative config in [kong/kong.yml](./kong/kong.yml) or the OpenShift ConfigMap in [deploy/openshift/kong-config.yaml](./deploy/openshift/kong-config.yaml):
 
-1. Set the upstream MCP server URL.
+1. Set each upstream MCP server URL and its route-specific audience and scopes.
 2. Set `resource_url` and `resource_metadata_url` to the public HTTPS MCP URL and its path-specific Protected Resource Metadata URL. Set `metadata_paths` to both the path-specific and root well-known paths reachable through your ingress.
 3. Add one or more `authorization_servers`, each pairing an issuer URL with its exact HTTPS OIDC discovery URL. Their `issuer` values are advertised to clients and are the only issuers accepted for JWT verification. The sample IdP and gateway URLs are placeholders.
 4. Set the expected access-token audience. Keep TLS verification enabled. Configure `required_scopes` for enforced permissions and `scopes_supported` to advertise the scopes clients can request.

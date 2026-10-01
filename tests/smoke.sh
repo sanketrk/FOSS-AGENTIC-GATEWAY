@@ -4,9 +4,10 @@ set -eu
 : "${GATEWAY_URL:?Set GATEWAY_URL, for example https://mcp.example.com}"
 : "${ACCESS_TOKEN:?Set ACCESS_TOKEN to a valid OIDC JWT access token}"
 
-endpoint="${GATEWAY_URL%/}/mcp"
-resource_url="${RESOURCE_URL:-https://mcp.example.com/mcp}"
-resource_metadata_url="${RESOURCE_METADATA_URL:-https://mcp.example.com/.well-known/oauth-protected-resource/mcp}"
+mcp_path="${MCP_PATH:-/mcp}"
+endpoint="${GATEWAY_URL%/}$mcp_path"
+resource_url="${RESOURCE_URL:-${GATEWAY_URL%/}$mcp_path}"
+resource_metadata_url="${RESOURCE_METADATA_URL:-${GATEWAY_URL%/}/.well-known/oauth-protected-resource$mcp_path}"
 tmpdir=$(mktemp -d)
 trap 'rm -f "$tmpdir/body" "$tmpdir/headers"; rmdir "$tmpdir"' EXIT HUP INT TERM
 
@@ -48,7 +49,7 @@ assert_status 'legacy initialize reaches OAuth validation' 401 \
   --data "$legacy_initialize"
 
 assert_status 'path-specific protected-resource metadata is public' 200 \
-  --request GET "${GATEWAY_URL%/}/.well-known/oauth-protected-resource/mcp"
+  --request GET "$resource_metadata_url"
 if ! grep -Fq "\"resource\":\"$resource_url\"" "$tmpdir/body" \
   || ! grep -q '"authorization_servers":' "$tmpdir/body"; then
   printf 'Protected-resource metadata is missing its resource or authorization server list.\n' >&2
