@@ -7,7 +7,7 @@ return {
     { config = { type = "record", fields = {
       { rpc_path = { type = "string", required = true, match = "^/" } },
       { rest_path = { type = "string", match = "^/[^?%%#]+[^/]$" } },
-      { upstream_rest_path = { type = "string", default = "", custom_validator = function(value)
+      { upstream_rest_path = { type = "string", len_min = 0, default = "", custom_validator = function(value)
           if value == "" or value:match("^/[^?%%#]+[^/]$") then return true end
           return nil, "Use an empty upstream mount or an absolute path without a trailing slash"
         end } },
