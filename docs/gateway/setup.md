@@ -46,7 +46,7 @@ sh tests/smoke.sh
 
 ## Registration API and control plane UI
 
-The optional [lightweight control plane](../../docs/control-plane/setup.md) lets administrators register, edit, and remove MCP servers, review a generated gateway configuration, and publish it through an OpenShift rollout. Registration changes remain drafts until published. The control plane uses OIDC login with a configurable trusted administrator claim; agents still authenticate with their separate OAuth policies at the gateway. Kong's Admin API remains disabled.
+The optional [lightweight control plane](../../docs/control-plane/setup.md) lets administrators register, edit, and remove MCP servers and A2A agents, attach token-exchange policies, review the generated gateway configuration, and publish it through an OpenShift rollout. Registration changes remain drafts until published. The control plane uses OIDC login with a configurable trusted administrator claim; agents still authenticate with their separate OAuth policies at the gateway. Kong's Admin API remains disabled.
 
 Run it locally with Python or deploy the optional `deploy/openshift/control-plane` overlay. See its [setup, API, and publication documentation](../../docs/control-plane/setup.md) for instructions and rollout limitations.
 

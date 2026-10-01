@@ -14,4 +14,4 @@
 | [Banking examples](../examples/banking/README.md) | Runnable agent-to-agent and agent-to-MCP scenarios with token exchange |
 | [Project migration](migration/project-rename.md) | Repository, directory, deployment, and identity migration |
 
-The project contains protocol-specific plugins. The administrator control plane currently manages the MCP registry; A2A routes and token exchange remain deployment-managed features.
+The project contains protocol-specific plugins. The administrator control plane manages MCP servers, A2A agents, and optional token-exchange policies in one draft and publication workflow.

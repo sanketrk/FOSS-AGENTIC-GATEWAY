@@ -31,7 +31,7 @@ curl -i https://agents.example.com/a2a/agent-a \
 
 The second request should receive 401 without credentials. With an appropriately scoped access token, a real upstream interprets the request and returns its task or protocol error. Streaming calls require that upstream's streaming capability and version-specific method. Tests exercise gateway validation and configuration loading; complete SDK/agent interoperability still requires a live upstream and issuer.
 
-The current control-plane registry manages MCP servers only. Its publication regenerates MCP routes and removes manually merged A2A routes; manage combined configurations through deployment tooling until registry support is extended. The local cluster's existing deployment is unchanged by adding this optional plugin to source.
+The control-plane registry can manage A2A agents alongside MCP servers and attach an optional token-exchange policy to either protocol. Publishing regenerates the complete registered configuration, so add all managed connections to the same draft before rollout.
 
 ## A2A 1.0 REST binding
 

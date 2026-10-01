@@ -17,6 +17,21 @@ def sample(server_id="server-a"):
             "audience": "https://gateway.example.com/mcp/" + server_id, "required_scopes": ["mcp:" + server_id + ":access"]}
 
 
+def sample_agent(agent_id="review-agent", exchange=True):
+    resource = {"id": agent_id, "type": "a2a", "name": "Review agent",
+                "upstream_url": "http://review-agent:3000/rpc", "issuer": "https://issuer.example.com/",
+                "discovery_url": "https://issuer.example.com/.well-known/openid-configuration",
+                "audience": "https://gateway.example.com/a2a/" + agent_id,
+                "required_scopes": ["review:execute"], "rest_enabled": True,
+                "public_card": True, "protocol_versions": ["1.0", "0.3"]}
+    if exchange:
+        resource["token_exchange"] = {"enabled": True,
+            "token_endpoint": "https://issuer.example.com/oauth/token", "resource": "urn:agent:review",
+            "client_id": "gateway-exchange", "client_secret_file": "/var/run/secrets/token-exchange/client-secret",
+            "client_auth_method": "client_secret_basic", "scopes": ["review:execute"], "timeout_ms": 3000}
+    return resource
+
+
 class RegistryTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -54,12 +69,35 @@ class RegistryTests(unittest.TestCase):
         self.assertFalse(policy["forward_bearer_token"])
         self.assertEqual(config["services"][0]["url"], "http://internal:3000/mcp")
 
+    def test_a2a_and_token_exchange_generation(self):
+        agent = validate(sample_agent())
+        config = generate([agent], "https://gateway.example.com")
+        route = config["services"][0]["routes"][0]
+        self.assertEqual(route["paths"], ["~/a2a/review-agent$", "~/a2a/review-agent/rest/", "~/a2a/review-agent/.well-known/agent-card.json$"])
+        self.assertEqual([plugin["name"] for plugin in route["plugins"]], ["a2a", "token-exchange"])
+        self.assertEqual(route["plugins"][0]["config"]["audience"], "https://gateway.example.com/a2a/review-agent")
+        self.assertEqual(route["plugins"][1]["config"]["gateway_audience"], "https://gateway.example.com/a2a/review-agent")
+        self.assertEqual(route["plugins"][1]["config"]["scopes"], ["review:execute"])
+
+    def test_existing_mcp_database_is_migrated(self):
+        self.registry.db.close()
+        legacy = __import__("sqlite3").connect(self.path)
+        legacy.execute("CREATE TABLE servers (id TEXT PRIMARY KEY, document TEXT NOT NULL)")
+        legacy.execute("INSERT INTO servers VALUES(?,?)", ("legacy", json.dumps(sample("legacy"))))
+        legacy.commit(); legacy.close()
+        migrated = Registry(self.path, "https://gateway.example.com")
+        self.assertEqual(migrated.resources()[0]["type"], "mcp")
+        self.assertIsNone(migrated.db.execute("SELECT 1 FROM sqlite_master WHERE name='servers'").fetchone())
+        migrated.db.close()
+
     def test_invalid_registration(self):
         for patch in [{"id": "../escape"}, {"id": "a$"}, {"upstream_url": "file:///etc/passwd"},
                       {"upstream_url": "http://user:secret@internal/mcp"}, {"issuer": "http://issuer/"},
                       {"audience": 'bad"audience'}, {"required_scopes": []}, {"required_scopes": ['bad"scope']},
                       {"allowed_origins": ["https://client/path"]}, {"legacy_enabled": "false"}, {"unknown": True}]:
             with self.subTest(patch=patch), self.assertRaises(ValueError): validate({**sample(), **patch})
+        with self.assertRaises(ValueError): validate({**sample_agent(), "protocol_versions": ["2.0"]})
+        with self.assertRaises(ValueError): validate({**sample_agent(), "token_exchange": {"enabled": True}})
 
     def test_publish_review_conflict_and_failure(self):
         calls = []
@@ -156,6 +194,19 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.request("/api/servers/server-a", "DELETE")[0], 200)
         self.assertEqual(self.request("/api/servers/server-a", "DELETE")[0], 404)
         self.assertEqual(json.loads(self.request("/api/servers")[2])["servers"], [])
+
+    def test_unified_resource_api(self):
+        self.assertEqual(self.request("/api/resources", "POST", sample())[0], 201)
+        self.assertEqual(self.request("/api/resources", "POST", sample_agent())[0], 201)
+        resources = json.loads(self.request("/api/resources")[2])["resources"]
+        self.assertEqual({resource["type"] for resource in resources}, {"mcp", "a2a"})
+        self.assertEqual(json.loads(self.request("/api/resources/review-agent")[2])["type"], "a2a")
+        changed_type = {**sample_agent(), "type": "mcp", "audience": "https://gateway.example.com/mcp/review-agent"}
+        self.assertEqual(self.request("/api/resources/review-agent", "PUT", changed_type)[0], 400)
+        self.assertEqual(len(json.loads(self.request("/api/agents")[2])["resources"]), 1)
+        self.assertEqual(len(json.loads(self.request("/api/mcp-servers")[2])["resources"]), 1)
+        policies = json.loads(self.request("/api/token-exchange-policies")[2])["policies"]
+        self.assertEqual(policies[0]["resource_id"], "review-agent")
 
     def test_content_type_and_input_rejection(self):
         self.assertEqual(self.request("/api/servers", "POST", sample(), headers={"Content-Type": "text/plain"})[0], 415)

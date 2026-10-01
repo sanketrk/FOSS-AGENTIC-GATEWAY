@@ -20,8 +20,8 @@ jobs:
           PYTHONPATH=apps/control-plane:tests/control-plane python3 - <<'PY'
           import json
           from app import generate, validate
-          from test_app import sample
-          config = generate([validate(sample())], "https://mcp.example.com")
+          from test_app import sample, sample_agent
+          config = generate([validate(sample()), validate(sample_agent())], "https://mcp.example.com")
           config["services"][0]["routes"][0]["plugins"].append({"name": "token-exchange", "config": {
               "token_endpoint": "https://sts.example.com/token", "gateway_audience": "https://mcp.example.com/mcp/server-a",
               "resource": "https://backend.example.com/mcp", "client_id": "gateway-client",

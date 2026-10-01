@@ -61,7 +61,7 @@ python3 apps/control-plane/app.py
 
 Keep this process running. Open `http://127.0.0.1:8080/`, select **Sign in with your identity provider**, and authenticate with the user assigned the administrator role. Successful login returns to the registry UI. Restart the process after changing environment settings and begin a fresh login; callback URLs are single-use and must not be replayed.
 
-`CONTROL_PLANE_PUBLIC_URL` is the browser UI origin. `GATEWAY_PUBLIC_URL` is the MCP gateway's HTTPS origin, without `/mcp`; use the actual OpenShift Route hostname when running the gateway in CRC. Opening the gateway root does not open the registry UI. These URLs can differ when the control plane runs locally and the gateway runs in OpenShift. Local gateway TLS certificates must be trusted by connecting clients.
+`CONTROL_PLANE_PUBLIC_URL` is the browser UI origin. `GATEWAY_PUBLIC_URL` is the gateway's HTTPS origin, without `/mcp` or `/a2a`; use the actual OpenShift Route hostname when running the gateway in CRC. Opening the gateway root does not open the registry UI. These URLs can differ when the control plane runs locally and the gateway runs in OpenShift. Local gateway TLS certificates must be trusted by connecting clients.
 
 ## Troubleshooting login
 

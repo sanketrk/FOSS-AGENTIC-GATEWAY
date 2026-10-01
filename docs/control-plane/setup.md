@@ -1,6 +1,6 @@
 # Open Agentic Gateway control plane
 
-The Open Agentic Gateway administrator service provides a persistent MCP server registry, authenticated JSON API, and browser UI. Python and SQLite keep it small; PyJWT and cryptography verify signed tokens. Agents connect to the gateway, not this administrator service. The current UI/API manages MCP registrations; A2A and exchange policies are configured separately in gateway deployment files.
+The Open Agentic Gateway administrator service provides a persistent registry, authenticated JSON API, and browser UI for MCP servers, A2A agents, and token-exchange policies. It previews and publishes their combined Kong configuration. Python and SQLite keep it small; PyJWT and cryptography verify signed administrator tokens. Agents connect to the gateway, not this administrator service.
 
 ## OIDC login
 
@@ -38,7 +38,7 @@ python3 apps/control-plane/app.py
 
 Open http://127.0.0.1:8080 and sign in with your identity provider. Remote deployments must use an HTTPS public URL. The configured URL determines callback URLs and Secure cookie behavior; untrusted forwarded headers do not override it.
 
-Keep the process running and restart it after editing environment settings. `CONTROL_PLANE_PUBLIC_URL` identifies this browser UI; `GATEWAY_PUBLIC_URL` identifies the separate MCP API origin, without `/mcp`. A local control plane can manage registrations for an OpenShift-hosted gateway. Registry publication to the cluster requires the publisher configuration described below; setting the gateway URL alone does not enable it. For callback/provider failures, see [login troubleshooting](../providers/auth0.md#troubleshooting-login).
+Keep the process running and restart it after editing environment settings. `CONTROL_PLANE_PUBLIC_URL` identifies this browser UI; `GATEWAY_PUBLIC_URL` identifies the separate gateway origin, without `/mcp` or `/a2a`. A local control plane can manage registrations for an OpenShift-hosted gateway. Registry publication to the cluster requires the publisher configuration described below; setting the gateway URL alone does not enable it. For callback/provider failures, see [login troubleshooting](../providers/auth0.md#troubleshooting-login).
 
 | Setting | Purpose |
 | --- | --- |
@@ -53,18 +53,20 @@ Keep the process running and restart it after editing environment settings. `CON
 | `OIDC_API_AUDIENCE` | Optional expected audience for JWT API tokens; required for access-token claim policy |
 | `OIDC_RESOURCE` | Optional standard RFC 8707 resource sent in both authorization and token requests |
 | `OIDC_AUTHORIZATION_PARAMS` | Optional JSON map of provider extension parameters; cannot override reserved OIDC fields |
-| `CONTROL_PLANE_PUBLIC_URL` | Public control-plane origin, distinct from MCP resources |
-| `GATEWAY_PUBLIC_URL` | Public gateway origin used for registered MCP resources |
+| `CONTROL_PLANE_PUBLIC_URL` | Public control-plane origin, distinct from gateway resources |
+| `GATEWAY_PUBLIC_URL` | Public gateway origin used for registered MCP and A2A resources |
 | `PUBLISH_NAMESPACE` | Optional Kubernetes namespace enabling publication |
 | `PUBLISH_CONFIGMAP`, `PUBLISH_DEPLOYMENT` | Publication targets; default to `open-agentic-gateway-kong` and `open-agentic-gateway` |
 
 [Auth0](../providers/auth0.md) is an optional provider configuration example using this same generic client. It is not a built-in dependency. For explicit local development only, `AUTH_MODE=token` retains the shared-token mode with a strong `CONTROL_PLANE_TOKEN`; there is no automatic fallback in OIDC mode.
 
-## Server registration and publication
+## Connection registration and publication
 
-Register the complete backend URL (including its MCP path), public server ID, trusted issuer/discovery URL, and required scopes. The token audience is the server's public MCP resource URI, for example `https://mcp.company.com/mcp/server-a`, consistent with resource-bound access tokens. The UI derives it from the gateway origin and server ID. Legacy opaque audience aliases from earlier revisions must be replaced in the authorization server's configuration and newly issued tokens. Generated configurations use resource-URI audiences.
+Register each backend as an MCP server or A2A agent with its complete upstream URL, public ID, trusted issuer/discovery URL, and required incoming scopes. The UI derives a resource-bound audience from the gateway origin and connection ID: `/mcp/{id}` for MCP or `/a2a/{id}` for A2A. A2A registrations can enable JSON-RPC, REST, protocol versions 1.0/0.3, and public Agent Cards.
 
-Registration is a draft change. Review the complete configuration before publication. Download `kong.json` for a manual deployment, or publish with the optional Kubernetes integration. Generated config contains only registered named servers and replaces static sample routes, including `/mcp` and root metadata. Each registered resource has its own protected-resource metadata endpoint. There is no open self-registration endpoint. Backend tool execution, custom parameter header validation, and legacy sessions remain upstream responsibilities.
+Token exchange is optional per connection. When enabled, configure the trusted HTTPS token endpoint, target resource URI, gateway client ID, mounted client-secret path, target scopes, and timeout. The generated route runs the protocol plugin first and `token-exchange` second. The identity service remains responsible for authorizing the exchange and issuing a target-bound, downscoped token.
+
+Registration is a draft change. Review the complete configuration before publication. Download `kong.json` for a manual deployment, or publish with the optional Kubernetes integration. Generated config contains only registered connections and replaces static sample routes. Each MCP resource has its own protected-resource metadata endpoint; each A2A resource has its own Agent Card path. There is no open self-registration endpoint. Backend execution and business authorization remain upstream responsibilities.
 
 ## API
 
@@ -73,25 +75,43 @@ All `/api/*` routes require a browser session or a signed JWT bearer access toke
 | Method | Path | Operation |
 | --- | --- | --- |
 | GET | `/api/session` | Authenticated identity and session CSRF token |
-| GET | `/api/servers` | List draft servers and gateway URL |
-| POST | `/api/servers` | Register a server; duplicate IDs return 409 |
-| PUT | `/api/servers/{id}` | Replace a policy; ID cannot change |
-| DELETE | `/api/servers/{id}` | Remove a draft server |
+| GET | `/api/resources` | List all draft MCP and A2A connections |
+| POST | `/api/resources` | Register a connection; duplicate IDs return 409 |
+| GET | `/api/resources/{id}` | Get one draft connection |
+| PUT | `/api/resources/{id}` | Replace a connection and policy; ID/type cannot change |
+| DELETE | `/api/resources/{id}` | Remove a draft connection |
+| GET | `/api/mcp-servers` | List MCP connections |
+| GET | `/api/agents` | List A2A connections |
+| GET | `/api/token-exchange-policies` | List enabled exchange policies |
+| GET/POST/PUT/DELETE | `/api/servers[/{id}]` | Backward-compatible MCP-only aliases |
 | GET | `/api/preview` | Complete config and revision hash |
 | GET | `/api/status` | Publication request state and last 50 audit events |
 | POST | `/api/publish` | Publish `{ "revision": "<reviewed hash>" }`; stale revisions return 409 |
 
 ```json
 {
-  "id": "server-a",
-  "name": "My MCP server",
-  "upstream_url": "http://server-a.internal:3000/mcp",
+  "id": "transaction-review",
+  "type": "a2a",
+  "name": "Transaction review agent",
+  "upstream_url": "http://transaction-review.internal:3000/rpc",
   "issuer": "https://identity.company.com/realms/enterprise",
   "discovery_url": "https://identity.company.com/realms/enterprise/.well-known/openid-configuration",
-  "audience": "https://mcp.company.com/mcp/server-a",
-  "required_scopes": ["mcp:server-a:access"],
+  "audience": "https://gateway.company.com/a2a/transaction-review",
+  "required_scopes": ["review:execute"],
   "allowed_origins": [],
-  "legacy_enabled": true
+  "rest_enabled": true,
+  "public_card": true,
+  "protocol_versions": ["1.0", "0.3"],
+  "token_exchange": {
+    "enabled": true,
+    "token_endpoint": "https://identity.company.com/oauth/token",
+    "resource": "urn:agent:transaction-review",
+    "client_id": "open-agentic-gateway-exchange",
+    "client_secret_file": "/var/run/secrets/token-exchange/client-secret",
+    "client_auth_method": "client_secret_basic",
+    "scopes": ["review:execute"],
+    "timeout_ms": 3000
+  }
 }
 ```
 

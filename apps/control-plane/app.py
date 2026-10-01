@@ -37,10 +37,14 @@ def url(value, https=False, origin=False):
 
 
 def validate(data):
-    fields = {"id", "name", "upstream_url", "issuer", "discovery_url", "audience",
-              "required_scopes", "allowed_origins", "legacy_enabled"}
+    fields = {"id", "type", "name", "upstream_url", "issuer", "discovery_url", "audience",
+              "required_scopes", "allowed_origins", "legacy_enabled", "rest_enabled",
+              "public_card", "protocol_versions", "token_exchange"}
     if not isinstance(data, dict) or set(data) - fields:
-        raise ValueError("Unknown fields or invalid server object")
+        raise ValueError("Unknown fields or invalid resource object")
+    resource_type = data.get("type", "mcp")
+    if resource_type not in ("mcp", "a2a"):
+        raise ValueError("type must be mcp or a2a")
     for key in ("id", "name", "audience"):
         if not isinstance(data.get(key), str) or not data[key].strip() or len(data[key]) > 128:
             raise ValueError(f"{key} is required and must be under 128 characters")
@@ -49,6 +53,7 @@ def validate(data):
     if not re.fullmatch(r"[A-Za-z0-9:/._-]+", data["audience"]):
         raise ValueError("Invalid audience")
     result = {key: data[key] for key in ("id", "name", "audience")}
+    result["type"] = resource_type
     result["upstream_url"] = url(data.get("upstream_url"))
     for key in ("issuer", "discovery_url"):
         result[key] = url(data.get(key), https=True)
@@ -61,37 +66,113 @@ def validate(data):
     if not isinstance(origins, list) or len(origins) > 32:
         raise ValueError("allowed_origins must be an array of up to 32 origins")
     result["allowed_origins"] = [url(v, https=True, origin=True) for v in origins]
-    legacy = data.get("legacy_enabled", True)
-    if not isinstance(legacy, bool):
-        raise ValueError("legacy_enabled must be a boolean")
-    result["legacy_enabled"] = legacy
+    if resource_type == "mcp":
+        legacy = data.get("legacy_enabled", True)
+        if not isinstance(legacy, bool):
+            raise ValueError("legacy_enabled must be a boolean")
+        result["legacy_enabled"] = legacy
+    else:
+        for key, default in (("rest_enabled", True), ("public_card", True)):
+            value = data.get(key, default)
+            if not isinstance(value, bool):
+                raise ValueError(f"{key} must be a boolean")
+            result[key] = value
+        versions = data.get("protocol_versions", ["1.0", "0.3"])
+        if (not isinstance(versions, list) or not versions or len(versions) > 2
+                or any(version not in ("1.0", "0.3") for version in versions)):
+            raise ValueError("protocol_versions must contain 1.0 and/or 0.3")
+        result["protocol_versions"] = list(dict.fromkeys(versions))
+    exchange = data.get("token_exchange")
+    if exchange is not None:
+        exchange_fields = {"enabled", "token_endpoint", "resource", "client_id", "client_secret_file",
+                           "client_auth_method", "scopes", "timeout_ms"}
+        if not isinstance(exchange, dict) or set(exchange) - exchange_fields:
+            raise ValueError("Invalid token_exchange policy")
+        enabled = exchange.get("enabled", False)
+        if not isinstance(enabled, bool):
+            raise ValueError("token_exchange.enabled must be a boolean")
+        if enabled:
+            token_endpoint = url(exchange.get("token_endpoint"), https=True)
+            resource = exchange.get("resource")
+            client_id = exchange.get("client_id")
+            secret_file = exchange.get("client_secret_file")
+            method = exchange.get("client_auth_method", "client_secret_basic")
+            exchange_scopes = exchange.get("scopes")
+            timeout_ms = exchange.get("timeout_ms", 3000)
+            if not isinstance(resource, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9+.-]*:[^\s]+", resource):
+                raise ValueError("token_exchange.resource must be an absolute URI")
+            if not isinstance(client_id, str) or not client_id or len(client_id) > 256:
+                raise ValueError("token_exchange.client_id is required")
+            if not isinstance(secret_file, str) or not re.fullmatch(r"/[^\0]+", secret_file):
+                raise ValueError("token_exchange.client_secret_file must be an absolute path")
+            if method not in ("client_secret_basic", "client_secret_post"):
+                raise ValueError("Invalid token exchange client authentication method")
+            if (not isinstance(exchange_scopes, list) or not exchange_scopes or len(exchange_scopes) > 32
+                    or any(not isinstance(scope, str) or not re.fullmatch(r"[A-Za-z0-9:/._-]{1,128}", scope)
+                           for scope in exchange_scopes)):
+                raise ValueError("At least one valid token exchange scope is needed")
+            if not isinstance(timeout_ms, int) or not 100 <= timeout_ms <= 30000:
+                raise ValueError("token_exchange.timeout_ms must be between 100 and 30000")
+            result["token_exchange"] = {"enabled": True, "token_endpoint": token_endpoint,
+                "resource": resource, "client_id": client_id, "client_secret_file": secret_file,
+                "client_auth_method": method, "scopes": list(dict.fromkeys(exchange_scopes)),
+                "timeout_ms": timeout_ms}
     return result
 
 
 def generate(servers, public_url):
     services = []
     for server in servers:
-        endpoint = "/mcp/" + server["id"]
-        metadata = "/.well-known/oauth-protected-resource" + endpoint
+        resource_type = server.get("type", "mcp")
+        endpoint = "/" + resource_type + "/" + server["id"]
+        if resource_type == "mcp":
+            metadata = "/.well-known/oauth-protected-resource" + endpoint
+            paths = ["~" + endpoint + "$", "~" + metadata.replace(".", r"\.") + "$"]
+            protocol_config = {
+                "resource_url": public_url + endpoint,
+                "resource_metadata_url": public_url + metadata,
+                "metadata_paths": [metadata],
+                "authorization_servers": [{"issuer": server["issuer"], "discovery_url": server["discovery_url"]}],
+                "audience": public_url + endpoint, "required_scopes": server["required_scopes"],
+                "scopes_supported": server["required_scopes"],
+                "allowed_origins": server["allowed_origins"], "forward_bearer_token": False,
+                "ssl_verify": True, "signing_algorithms": ["RS256"],
+                "legacy_protocol_versions": ["2025-11-25", "2025-03-26"] if server["legacy_enabled"] else [],
+            }
+        else:
+            card = endpoint + "/.well-known/agent-card.json"
+            rest = endpoint + "/rest"
+            paths = ["~" + endpoint + "$"] + (["~" + rest + "/"] if server["rest_enabled"] else []) + ["~" + card + "$"]
+            protocol_config = {
+                "rpc_path": endpoint, "rest_path": rest if server["rest_enabled"] else None,
+                "upstream_rest_path": "", "card_path": card,
+                "upstream_card_path": "/.well-known/agent-card.json", "public_card": server["public_card"],
+                "audience": public_url + endpoint, "protocol_versions": server["protocol_versions"],
+                "authorization_servers": [{"issuer": server["issuer"], "discovery_url": server["discovery_url"]}],
+                "signing_algorithms": ["RS256"], "required_scopes": server["required_scopes"],
+                "allowed_origins": server["allowed_origins"], "forward_bearer_token": False,
+            }
+            if protocol_config["rest_path"] is None:
+                del protocol_config["rest_path"]
+        plugins = [{"name": resource_type, "config": protocol_config}]
+        exchange = server.get("token_exchange")
+        if exchange and exchange.get("enabled"):
+            plugins.append({"name": "token-exchange", "config": {
+                "token_endpoint": exchange["token_endpoint"], "gateway_audience": public_url + endpoint,
+                "resource": exchange["resource"], "client_id": exchange["client_id"],
+                "client_secret_file": exchange["client_secret_file"],
+                "client_auth_method": exchange["client_auth_method"], "scopes": exchange["scopes"],
+                "timeout_ms": exchange["timeout_ms"],
+            }})
         services.append({
-            "name": "mcp-" + server["id"], "url": server["upstream_url"],
+            "name": resource_type + "-" + server["id"], "url": server["upstream_url"],
             "connect_timeout": 5000, "read_timeout": 3600000, "write_timeout": 3600000,
             "retries": 0, "routes": [{
-                "name": "mcp-" + server["id"] + "-http",
-                "paths": ["~" + endpoint + "$", "~" + metadata.replace(".", r"\.") + "$"],
+                "name": resource_type + "-" + server["id"] + "-http",
+                "paths": paths,
                 "strip_path": True, "path_handling": "v0", "preserve_host": False,
                 "request_buffering": False, "response_buffering": False,
-                "plugins": [{"name": "mcp", "config": {
-                    "resource_url": public_url + endpoint,
-                    "resource_metadata_url": public_url + metadata,
-                    "metadata_paths": [metadata],
-                    "authorization_servers": [{"issuer": server["issuer"], "discovery_url": server["discovery_url"]}],
-                    "audience": public_url + endpoint, "required_scopes": server["required_scopes"],
-                    "scopes_supported": server["required_scopes"],
-                    "allowed_origins": server["allowed_origins"], "forward_bearer_token": False,
-                    "ssl_verify": True, "signing_algorithms": ["RS256"],
-                    "legacy_protocol_versions": ["2025-11-25", "2025-03-26"] if server["legacy_enabled"] else [],
-                }}],
+                "plugins": plugins,
             }],
         })
     # JSON is also valid YAML and can be loaded as Kong's declarative config.
@@ -104,45 +185,59 @@ class Registry:
         self.publisher = publisher
         self.lock = threading.RLock()
         self.db = sqlite3.connect(database, check_same_thread=False)
-        self.db.execute("CREATE TABLE IF NOT EXISTS servers (id TEXT PRIMARY KEY, document TEXT NOT NULL)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS resources (id TEXT PRIMARY KEY, document TEXT NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, timestamp REAL, action TEXT, details TEXT)")
         self.db.execute("CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value TEXT)")
+        legacy = self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='servers'").fetchone()
+        if legacy:
+            for resource_id, document in self.db.execute("SELECT id,document FROM servers"):
+                migrated = json.loads(document)
+                migrated["type"] = "mcp"
+                self.db.execute("INSERT OR IGNORE INTO resources VALUES(?,?)", (resource_id, json.dumps(migrated)))
+            self.db.execute("DROP TABLE servers")
         self.db.commit()
 
     def audit(self, action, details):
         self.db.execute("INSERT INTO events(timestamp,action,details) VALUES(?,?,?)", (time.time(), action, json.dumps(details)))
 
-    def servers(self):
+    def resources(self, resource_type=None):
         with self.lock:
-            return [json.loads(row[0]) for row in self.db.execute("SELECT document FROM servers ORDER BY id")]
+            resources = [json.loads(row[0]) for row in self.db.execute("SELECT document FROM resources ORDER BY id")]
+            return [resource for resource in resources if not resource_type or resource.get("type", "mcp") == resource_type]
+
+    def servers(self):
+        return self.resources("mcp")
 
     def save(self, data, create=False, actor=None):
         server = validate(data)
-        expected_audience = self.public_url + "/mcp/" + server["id"]
+        expected_audience = self.public_url + "/" + server["type"] + "/" + server["id"]
         if server["audience"] != expected_audience:
-            raise ValueError("Token audience must match the server's public MCP resource URI")
+            raise ValueError("Token audience must match the resource's public gateway URI")
         with self.lock, self.db:
-            exists = self.db.execute("SELECT 1 FROM servers WHERE id=?", (server["id"],)).fetchone()
+            existing = self.db.execute("SELECT document FROM resources WHERE id=?", (server["id"],)).fetchone()
+            exists = existing is not None
             if create and exists:
-                raise FileExistsError("Server ID already exists")
+                raise FileExistsError("Resource ID already exists")
             if not create and not exists:
-                raise KeyError("Server not found")
-            for other in self.servers():
+                raise KeyError("Resource not found")
+            if existing and json.loads(existing[0]).get("type", "mcp") != server["type"]:
+                raise ValueError("Resource type cannot change; create a new connection instead")
+            for other in self.resources():
                 if other["id"] != server["id"] and other["audience"] == server["audience"]:
                     raise ValueError("Each server must use a distinct audience")
-            self.db.execute("INSERT OR REPLACE INTO servers VALUES(?,?)", (server["id"], json.dumps(server)))
-            self.audit("create" if create else "update", {"server": server["id"], "actor": actor})
+            self.db.execute("INSERT OR REPLACE INTO resources VALUES(?,?)", (server["id"], json.dumps(server)))
+            self.audit("create" if create else "update", {"resource": server["id"], "type": server["type"], "actor": actor})
         return server
 
     def delete(self, server_id, actor=None):
         with self.lock, self.db:
-            if self.db.execute("DELETE FROM servers WHERE id=?", (server_id,)).rowcount != 1:
-                raise KeyError("Server not found")
-            self.audit("delete", {"server": server_id, "actor": actor})
+            if self.db.execute("DELETE FROM resources WHERE id=?", (server_id,)).rowcount != 1:
+                raise KeyError("Resource not found")
+            self.audit("delete", {"resource": server_id, "actor": actor})
 
     def preview(self):
         with self.lock:
-            config = generate(self.servers(), self.public_url)
+            config = generate(self.resources(), self.public_url)
             digest = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
             return {"revision": digest, "config": config}
 
@@ -287,18 +382,38 @@ def handler(registry, token=None, oidc=None):
                     if not 0 < length <= MAX_BODY:
                         return self.send(413, {"error": "Request body exceeds limit or is empty"})
                     data = json.loads(self.rfile.read(length))
+                if path == "/api/resources" and self.command == "GET":
+                    return self.send(200, {"resources": registry.resources(), "public_url": registry.public_url})
+                if path == "/api/resources" and self.command == "POST":
+                    return self.send(201, registry.save(data, create=True, actor=actor))
+                resource_match = re.fullmatch(r"/api/resources/([a-z][a-z0-9-]{0,62})", path)
+                if resource_match and self.command == "GET":
+                    resource = next((item for item in registry.resources() if item["id"] == resource_match[1]), None)
+                    if resource is None: raise KeyError("Resource not found")
+                    return self.send(200, resource)
+                if path == "/api/mcp-servers" and self.command == "GET":
+                    return self.send(200, {"resources": registry.resources("mcp"), "public_url": registry.public_url})
+                if path == "/api/agents" and self.command == "GET":
+                    return self.send(200, {"resources": registry.resources("a2a"), "public_url": registry.public_url})
+                if path == "/api/token-exchange-policies" and self.command == "GET":
+                    policies = [{"resource_id": resource["id"], **resource["token_exchange"]}
+                                for resource in registry.resources() if resource.get("token_exchange", {}).get("enabled")]
+                    return self.send(200, {"policies": policies})
+                # Compatibility aliases for existing MCP-only API clients.
                 if path == "/api/servers" and self.command == "GET":
                     return self.send(200, {"servers": registry.servers(), "public_url": registry.public_url})
                 if path == "/api/servers" and self.command == "POST":
+                    if isinstance(data, dict): data.setdefault("type", "mcp")
                     return self.send(201, registry.save(data, create=True, actor=actor))
-                match = re.fullmatch(r"/api/servers/([a-z][a-z0-9-]{0,62})", path)
+                match = re.fullmatch(r"/api/(resources|servers)/([a-z][a-z0-9-]{0,62})", path)
                 if match and self.command == "PUT":
-                    if not isinstance(data, dict) or data.get("id") != match[1]:
-                        raise ValueError("Server ID must match URL")
+                    if not isinstance(data, dict) or data.get("id") != match[2]:
+                        raise ValueError("Resource ID must match URL")
+                    if match[1] == "servers": data.setdefault("type", "mcp")
                     return self.send(200, registry.save(data, actor=actor))
                 if match and self.command == "DELETE":
-                    registry.delete(match[1], actor=actor)
-                    return self.send(200, {"deleted": match[1]})
+                    registry.delete(match[2], actor=actor)
+                    return self.send(200, {"deleted": match[2]})
                 if path == "/api/preview" and self.command == "GET":
                     return self.send(200, registry.preview())
                 if path == "/api/status" and self.command == "GET":
@@ -311,7 +426,7 @@ def handler(registry, token=None, oidc=None):
             except FileExistsError as error:
                 self.send(409, {"error": str(error)})
             except KeyError:
-                self.send(404, {"error": "Server not found"})
+                self.send(404, {"error": "Resource not found"})
             except (ValueError, TypeError) as error:
                 self.send(400, {"error": str(error)})
             except Exception:

@@ -45,9 +45,9 @@ The aim is an open collection of useful gateway capabilities that grows through 
 | `a2a` plugin | Connect agents to other agents over JSON-RPC or REST and check incoming access. |
 | `token-exchange` plugin | Obtain a separate backend token with the configured permissions. |
 | Python SDK | Call the gateway and verify the required identity policy at backends. |
-| Control plane | Register MCP connections, review configuration, and publish it with OIDC administrator login. |
+| Control plane | Register MCP servers and A2A agents, assign token-exchange policies, review configuration, and publish it with OIDC administrator login. |
 
-A2A and token-exchange settings currently use deployment configuration. See the [supported profiles](docs/protocols/interoperability.md), [A2A guide](docs/protocols/a2a.md), and [SDK guide](sdk/python/README.md) for current limits.
+The control plane manages MCP, A2A, and token-exchange settings in one publication workflow. The same settings can also be managed as deployment configuration. See the [supported profiles](docs/protocols/interoperability.md), [A2A guide](docs/protocols/a2a.md), and [SDK guide](sdk/python/README.md) for current limits.
 
 ### Use these plugins with Kong OSS
 
