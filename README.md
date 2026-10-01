@@ -1,22 +1,29 @@
 # FOSS-AGENTIC-GATEWAY
 
-**An open foundation for connecting AI agents and tools—and building what comes next.**
+**Build the gateway your agents need. Share the capabilities everyone can use.**
 
-Agent ecosystems grow when people can build on each other's work. FOSS-AGENTIC-GATEWAY makes the connection layer something we can build together: reusable plugins for tool access, agent collaboration, and limited backend permissions.
+AI agents need tools, other agents, and permission to act. Every team encounters the same connection problems: how to reach a service, check access, and give it only the permissions it needs.
 
-Use it to connect your own agents. Study and adapt the source. Contribute a capability that other teams can reuse. The project is Apache-2.0 licensed, runs on Kong Gateway OSS, and gives contributors a working gateway, SDK, and examples to build on.
+FOSS-AGENTIC-GATEWAY is a place to solve those problems together. It provides an open gateway built on Kong OSS, with reusable plugins for MCP, A2A, and token exchange. Run it for your own workflows, improve an existing capability, or contribute the next plugin.
 
-[Try the banking examples](examples/banking/README.md) · [Deploy the gateway](docs/gateway/setup.md) · [Set up the control plane](docs/control-plane/setup.md) · [Browse the docs](docs/README.md) · [Contribute](CONTRIBUTING.md)
+**Need a gateway that chooses the right LLM for a task? Bring that idea here.** Automatic model routing is an extension we invite the community to design and build; today's working foundation covers agent and tool connections.
 
-## Why build this together?
+[Try it](examples/banking/README.md) · [Build with us](CONTRIBUTING.md) · [Propose a capability](https://github.com/sanketrk/FOSS-AGENTIC-GATEWAY/issues/new) · [Deploy it](docs/gateway/setup.md)
 
-As AI agents become part of enterprise workflows, they need to call tools and collaborate with other agents. Each new connection brings access rules, credentials, and integration work. Maintaining that work separately in every agent becomes harder as the number of agents and services grows.
+## Why build here?
 
-FOSS-AGENTIC-GATEWAY brings those shared concerns into one place. It combines tool access through MCP, agent collaboration through A2A, and backend access through OAuth token exchange. Teams can connect a new service and configure its access policy while keeping agents focused on their business workflows.
+A useful solution should be able to travel beyond the team that created it. An interoperability fix, an access policy, or a routing strategy can become a reusable plugin that helps other projects.
 
-For the open-source community, the opportunity is to turn solutions built for one deployment into capabilities others can use. A better access policy, a new routing strategy, or an interoperability fix can become a focused contribution to the shared gateway.
+This repository gives contributors a starting point: a working gateway, three plugins, a Python SDK, an administrator UI, and banking examples tested through real token exchange. You can work on one capability and demonstrate it alongside the others.
 
-The project builds on Kong Gateway OSS and OpenResty, with three project plugins, an administrator control plane, a Python SDK, and runnable examples. You can start with one component and help it grow.
+| For builders | For teams running agents |
+| --- | --- |
+| Read, adapt, and contribute Apache-2.0 source. | Host the gateway in your own infrastructure. |
+| Add a focused plugin using Kong's extension mechanism. | Choose capabilities per connection. |
+| Use shared examples and CI to demonstrate your change. | Connect tools and agents through a common entry point. |
+| Share integrations across open protocols and agent stacks. | Keep backend credentials and access policy at the gateway. |
+
+The aim is an open collection of useful gateway capabilities that grows through contributions. The current project is a starting point you can use and extend.
 
 ```mermaid
 flowchart LR
@@ -33,63 +40,29 @@ flowchart LR
     class M,B,I service
 ```
 
-## What is in it for the open-source community?
+## What is available today?
 
-- **Reusable building blocks.** Use and adapt the MCP, A2A, and token-exchange plugin source under Apache-2.0. These project plugins require no Kong Enterprise license.
-- **A place for focused contributions.** Improve one plugin or add a new one, with shared examples and CI to exercise it in a working gateway.
-- **Choice across agent stacks.** Work with open protocols and configurable identity services, so a contribution can serve more than one vendor's ecosystem.
-- **More than code contributions.** Bring an interoperability report, a deployment guide, an SDK improvement, or an example from your domain.
-
-### How does this relate to Kong's plugin ecosystem?
-
-Kong's plugin catalog includes OSS plugins, third-party plugins, and features requiring commercial licenses. Availability depends on the plugin and gateway version. For example, Kong's [OpenID Connect plugin](https://developer.konghq.com/plugins/openid-connect/) is marked Enterprise-only, while [AI Proxy Advanced](https://developer.konghq.com/plugins/ai-proxy-advanced/) requires an AI license.
-
-This project adds its own open `mcp`, `a2a`, and `token-exchange` plugins to Kong OSS. Their source is available here for Kong OSS users to inspect, adapt, and install with the required dependencies. The supplied image includes them alongside the OSS release's bundled plugins. You can configure compatible OSS plugins as well; additional plugins need compatibility and ordering checks. Check the [Kong Plugin Hub](https://developer.konghq.com/plugins/) for each upstream plugin's availability.
-
-Our plugins are distributed through this repository and its gateway image; they have not been published to Kong's Plugin Hub. This project does not grant access to Kong's licensed plugins.
-
-## What this gives your enterprise
-
-| Benefit | What it means for your teams |
+| Component | What you can do |
 | --- | --- |
-| Simpler connections | Agents use gateway addresses; internal service locations stay in gateway configuration. |
-| Consistent access checks | Each endpoint has a policy defining who may call it and what permission is required. |
-| Limited downstream access | Exchange a caller's broad access for a token restricted to the target service and its configured permissions. |
-| Fewer backend credentials in agents | Agents hold their own credentials; the gateway obtains access for internal services. |
-| Flexible adoption | Enable the plugins needed for each route and add connections as your workflows grow. |
-| Ownership and choice | Host the gateway yourself, use open protocols, and configure your identity provider. |
+| `mcp` plugin | Connect agents to MCP tools and check incoming access. |
+| `a2a` plugin | Connect agents to other agents over JSON-RPC or REST and check incoming access. |
+| `token-exchange` plugin | Obtain a separate backend token with the configured permissions. |
+| Python SDK | Call the gateway and verify the required identity policy at backends. |
+| Control plane | Register MCP connections, review configuration, and publish it with OIDC administrator login. |
 
-## Token exchange: give each target only what it needs
+A2A and token-exchange settings currently use deployment configuration. See the [supported profiles](docs/protocols/interoperability.md), [A2A guide](docs/protocols/a2a.md), and [SDK guide](sdk/python/README.md) for current limits.
 
-A user may have **100 entitlements** across the enterprise. A transaction-review agent may need **just one**: permission to review a transaction. Passing all the user's permissions to that agent would give it more access than its task requires.
+### And Kong's many plugins?
 
-Token exchange lets the gateway request a separate token for that target, with only the configured permission. This narrowing of access is called **downscoping**.
+Kong's catalog includes OSS plugins and commercially licensed features. They are not all available in OSS: its [OpenID Connect plugin](https://developer.konghq.com/plugins/openid-connect/) is marked Enterprise-only, and [AI Proxy Advanced](https://developer.konghq.com/plugins/ai-proxy-advanced/) requires an AI license.
 
-```mermaid
-flowchart LR
-    U["User<br/>100 enterprise entitlements"] --> A["Calling agent<br/>Acts for the user"]
-    A --> G["Gateway<br/>Checks incoming access"]
-    G --> S["Identity service<br/>Checks entitlement<br/>Issues a limited token"]
-    S --> T["Gateway forwards to<br/>transaction-review agent<br/>Only review:execute"]
-    classDef caller fill:#eff6ff,stroke:#2563eb,color:#172554
-    classDef policy fill:#eef2ff,stroke:#6366f1,color:#312e81
-    classDef limited fill:#ecfdf5,stroke:#059669,color:#064e3b
-    class U,A caller
-    class G,S policy
-    class T limited
-```
+**Our three project plugins are available to Kong OSS users as Apache-2.0 source in this repository.** The supplied gateway image includes them and the OSS release's bundled plugins. Compatible OSS plugins can be configured alongside them; check version support and how they interact. Each upstream plugin retains its own license.
 
-The identity service must verify that the caller is entitled to the requested permission. The target checks the new token before doing any work. Permissions for payments, customer administration, and other services stay out of the token sent to the transaction-review agent.
+See the [Kong Plugin Hub](https://developer.konghq.com/plugins/) for upstream availability and our [contribution guide](CONTRIBUTING.md) for installing and extending project plugins.
 
-With the appropriate identity policy, the target can also identify the original caller and the gateway acting for it. Each service gets its own permission; access to accounts does not automatically grant access to transactions.
+## Plugins make room for your next idea
 
-Exchange works with both MCP and A2A. It is optional in the base gateway and required by the banking examples. Today, requested permissions are configured per route; the identity service owns entitlement decisions. See the [token-exchange guide](docs/plugins/token-exchange.md) for setup and enforcement details.
-
-## A flexible plugin architecture
-
-Different connections need different behavior. A tool server needs MCP handling; another agent needs A2A handling. Either connection can use the same token-exchange capability.
-
-The gateway composes these capabilities on each route:
+Choose the behavior a connection needs. An MCP route uses the tool plugin; an A2A route uses the agent plugin. Either can add the same token-exchange plugin. That shared capability can improve without rebuilding both protocols.
 
 ```mermaid
 flowchart LR
@@ -111,55 +84,56 @@ flowchart LR
     class T target
 ```
 
-*This diagram shows routes with token exchange enabled. Routes can also use a protocol plugin without exchange.*
+*The diagram shows exchange-enabled routes. Token exchange is optional in the base gateway.*
 
-| Plugin | Responsibility | Where it fits |
-| --- | --- | --- |
-| `mcp` | Handle tool traffic and verify incoming access | Agent → MCP server |
-| `a2a` | Handle agent traffic and verify incoming access | Agent → agent, over JSON-RPC or REST |
-| `token-exchange` | Obtain a separate token for the backend | Shared by either route type |
+A new capability can follow the same approach: a focused plugin, clear configuration, and an example others can run. Contributors implement, package, and test new plugins using Kong's plugin mechanism. The [contribution guide](CONTRIBUTING.md#adding-a-plugin) explains the steps.
 
-Plugins have distinct responsibilities and are enabled through configuration. Token exchange uses a shared authentication contract rather than depending on MCP or A2A internals. This allows the protocol handling and identity behavior to evolve separately.
+### Build automatic LLM routing with us
 
-Developers can extend the gateway through Kong's plugin mechanism. Additional plugins require implementation, inclusion in the gateway image, configuration, and testing. The current built-in project plugins are `mcp`, `a2a`, and `token-exchange`.
+Imagine a policy that sends simple summaries to a lower-cost model, chooses a model evaluated for a demanding task, and keeps sensitive requests on an approved local model. The choice could depend on cost, latency, capability, availability, and data-location rules.
 
-## Could you contribute automatic LLM routing? Yes.
+A contributor could turn that policy into an LLM-routing plugin. “Best” would be defined by the application's requirements and measured results. A useful first contribution could select between two approved model endpoints, explain each choice, and include a reproducible example.
 
-Suppose a workflow should choose a model based on cost, response time, task capability, or where data is allowed to run. A contributor could build an LLM-routing plugin that makes that choice from configured, approved providers. “Best” would mean best for that deployment's policy and measured results.
+**LLM routing is proposed, not implemented.** It would need model-call routes, provider integration, access controls, and tests. Existing MCP and A2A calls have their own configured destinations and permissions.
 
-For example: send a simple summary to a lower-cost model, choose a model evaluated for a demanding task, and keep sensitive requests on an approved local model.
+Other contribution directions include:
 
-**This is a contribution idea, not an implemented feature.** The gateway currently routes MCP and A2A traffic to configured services. An LLM-routing extension would introduce explicit model-call routes and provider handling, with tests for model selection, credentials, streaming, and failure behavior. Existing MCP and A2A calls would retain their own endpoint and access policies.
+- Agent and tool discovery, so callers can find approved services.
+- Observability that explains calls, latency, and failures.
+- Control-plane support for A2A and token exchange.
+- More SDK languages, identity integrations, and domain examples.
 
-| Ideas we can build together | What a contribution could enable |
-| --- | --- |
-| Automatic LLM routing | Select among approved models using cost, latency, capability, and data-location policy. |
-| Agent and tool discovery | Help callers find approved services as the catalog grows. |
-| Agent-aware observability | Show which service was called, how long it took, and whether it succeeded. |
-| Richer administration | Manage A2A and token-exchange configuration through the control plane. |
-| More SDKs and examples | Make gateway integration easier in other languages and domains. |
+These are invitations to build, rather than a committed release schedule. [Open a proposal](https://github.com/sanketrk/FOSS-AGENTIC-GATEWAY/issues/new) with the problem and a concrete workflow. Documentation fixes, bug reports, and interoperability tests are equally useful contributions.
 
-*These are invitations for discussion and contributions, not shipped capabilities or a committed delivery schedule.*
+## Give each target only the access it needs
 
-[Open a proposal](https://github.com/sanketrk/FOSS-AGENTIC-GATEWAY/issues/new) describing the problem you want to solve, or start with the [contribution guide](CONTRIBUTING.md). A small, useful contribution is a good place to begin.
+A user may have **100 enterprise entitlements**. A transaction-review agent may need **just one**: `review:execute`.
 
-## See it work: a banking workflow
+Token exchange lets the gateway request a separate token for that target with only its configured permission. This is **downscoping**. Your identity service checks that the caller is entitled to the permission; the target validates the token before acting.
 
-A banking assistant needs an account summary and help understanding a recent purchase. Through the gateway, it:
+```mermaid
+flowchart LR
+    U["User<br/>100 enterprise entitlements"] --> A["Calling agent<br/>Acts for the user"]
+    A --> G["Gateway<br/>Checks incoming access"]
+    G --> S["Identity service<br/>Checks entitlement<br/>Issues a limited token"]
+    S --> T["Gateway forwards to<br/>transaction-review agent<br/>Only review:execute"]
+    classDef caller fill:#eff6ff,stroke:#2563eb,color:#172554
+    classDef policy fill:#eef2ff,stroke:#6366f1,color:#312e81
+    classDef limited fill:#ecfdf5,stroke:#059669,color:#064e3b
+    class U,A caller
+    class G,S policy
+    class T limited
+```
 
-1. Calls the accounts MCP server for an account summary.
-2. Calls the transactions MCP server for recent transactions.
-3. Calls a transaction-review agent over A2A to summarize the purchase.
+The target receives limited access, while permissions for unrelated services stay out of its token. With the appropriate identity policy, it can also identify the original caller and the gateway acting for them.
 
-Each target receives a separate token with its configured permission. The runnable examples include **four standalone components**—two agents and two MCP servers—plus a local identity service, TLS, and token exchange. They use synthetic data. The calling agent demonstrates both A2A JSON-RPC and REST.
+Today, requested scopes are configured per route, and the identity service owns entitlement decisions. The [token-exchange guide](docs/plugins/token-exchange.md) covers setup and enforcement.
 
-[Run the banking examples →](examples/banking/README.md)
+## Try a complete banking workflow
 
-## Administration and SDK
+The examples contain **two agents and two MCP servers**. A banking orchestrator reads an account summary, retrieves recent transactions, and asks a transaction-review agent to summarize a purchase. Each target receives its own limited token.
 
-The **control plane** provides an administrator UI and registration API for MCP connections, with OIDC login, draft review, and configuration publication. A2A connections and token exchange currently use deployment configuration rather than the UI. Auth0 is one documented identity-provider option.
-
-The **Python SDK** helps applications call the gateway and lets backends enforce the configured exchange-token identity policy. See [control-plane setup](docs/control-plane/setup.md) and the [SDK guide](sdk/python/README.md).
+The examples use synthetic data and include a local identity service, TLS, and both A2A JSON-RPC and REST. [Run them locally →](examples/banking/README.md)
 
 ## Get started
 
@@ -168,28 +142,17 @@ git clone https://github.com/sanketrk/FOSS-AGENTIC-GATEWAY.git
 cd FOSS-AGENTIC-GATEWAY
 ```
 
-| Your next step | Guide |
+| Start here | Guide |
 | --- | --- |
-| Try a complete local workflow | [Banking examples](examples/banking/README.md) |
-| Configure, build, and deploy | [Gateway setup](docs/gateway/setup.md) |
+| Run the complete example | [Banking examples](examples/banking/README.md) |
+| Contribute a fix or capability | [Contributing](CONTRIBUTING.md) |
+| Configure and deploy | [Gateway setup](docs/gateway/setup.md) |
 | Manage MCP connections | [Control-plane setup](docs/control-plane/setup.md) |
-| Connect application code | [Python SDK](sdk/python/README.md) |
-| Review supported behavior | [Interoperability](docs/protocols/interoperability.md), [A2A](docs/protocols/a2a.md), [token exchange](docs/plugins/token-exchange.md) |
+| Explore the code | [Gateway plugins](gateway/plugins/), [SDK](sdk/python/), [control plane](apps/control-plane/), [tests](tests/) |
+| Find all guides | [Documentation index](docs/README.md) |
 
-You supply the services, identity configuration, and deployment environment. Each backend checks access and owns its business logic. Production deployments also need network restrictions, monitoring, and operational policies; the linked guides describe current capabilities and limits.
+You supply the services, identity configuration, and deployment environment. Backends own their business logic and authorization. Production deployments also need network restrictions, monitoring, and operational policies.
 
-## Explore the project
+## License
 
-| Location | Purpose |
-| --- | --- |
-| `gateway/` | Gateway and its three plugins |
-| `apps/control-plane/` | Administrator UI and registration API |
-| `sdk/python/` | Client and backend verification SDK |
-| `examples/` | Gateway configurations and banking components |
-| `deploy/openshift/` | OpenShift and Kubernetes deployment manifests |
-| `docs/` | Setup and technical guides |
-| `tests/` | Automated checks |
-
-## Open source
-
-Use, modify, and contribute under [Apache-2.0](LICENSE). Built on Kong Gateway OSS and OpenResty. The project contains no Kong Enterprise modules; dependency license information is in the [gateway setup guide](docs/gateway/setup.md).
+Use, modify, and contribute under [Apache-2.0](LICENSE). Built on Kong Gateway OSS and OpenResty. The [gateway setup guide](docs/gateway/setup.md) covers dependency licenses.
