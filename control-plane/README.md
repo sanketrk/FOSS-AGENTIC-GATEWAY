@@ -22,10 +22,12 @@ Logout always clears the local session. When discovery advertises `end_session_e
 python3 -m venv .venv
 . .venv/bin/activate
 python3 -m pip install -r control-plane/requirements.txt
-cp control-plane/.env.example control-plane/.env
+test -f control-plane/.env || cp control-plane/.env.example control-plane/.env
 ```
 
-Edit the ignored `.env` with your issuer/client settings and administrator claim policy. Register `http://127.0.0.1:8080/auth/callback` as the client callback and `http://127.0.0.1:8080/` as the post-logout redirect. Then:
+Edit the ignored `.env` with your issuer/client settings and administrator claim policy. Register `http://127.0.0.1:8080/auth/callback` as the client callback and `http://127.0.0.1:8080/` as the post-logout redirect.
+
+For Auth0, complete the [provider setup guide](AUTH0.md#tenant-setup), including its API audience, the web application's **User-delegated Access** grant, and your login user's administrator role. The generic default `/roles` policy differs from that guide's `/permissions` access-token policy; use the complete settings from the provider guide. Start the service:
 
 ```sh
 set -a
@@ -35,6 +37,8 @@ python3 control-plane/app.py
 ```
 
 Open http://127.0.0.1:8080 and sign in with your identity provider. Remote deployments must use an HTTPS public URL. The configured URL determines callback URLs and Secure cookie behavior; untrusted forwarded headers do not override it.
+
+Keep the process running and restart it after editing environment settings. `CONTROL_PLANE_PUBLIC_URL` identifies this browser UI; `GATEWAY_PUBLIC_URL` identifies the separate MCP API origin, without `/mcp`. A local control plane can manage registrations for an OpenShift-hosted gateway. Registry publication to the cluster requires the publisher configuration described below; setting the gateway URL alone does not enable it. For callback/provider failures, see [login troubleshooting](AUTH0.md#troubleshooting-login).
 
 | Setting | Purpose |
 | --- | --- |
