@@ -8,6 +8,7 @@ RUN luarocks --lua-version=5.1 install --deps-mode=none \
 
 COPY kong/plugins/mcp-gateway /usr/local/share/lua/5.1/kong/plugins/mcp-gateway
 COPY kong/plugins/mcp-token-exchange /usr/local/share/lua/5.1/kong/plugins/mcp-token-exchange
+COPY kong/plugins/a2a-gateway /usr/local/share/lua/5.1/kong/plugins/a2a-gateway
 COPY kong/kong.yml /etc/kong/kong.yml
 COPY kong/nginx-extra.conf /etc/kong/nginx-extra.conf
 
@@ -17,7 +18,7 @@ ENV KONG_DATABASE=off \
     KONG_PROXY_LISTEN=0.0.0.0:8000 \
     KONG_STATUS_LISTEN=0.0.0.0:8100 \
     KONG_PREFIX=/tmp/kong \
-    KONG_PLUGINS=bundled,mcp-gateway,mcp-token-exchange \
+    KONG_PLUGINS=bundled,mcp-gateway,mcp-token-exchange,a2a-gateway \
     KONG_NGINX_HTTP_INCLUDE=/etc/kong/nginx-extra.conf \
     KONG_NGINX_HTTP_CLIENT_MAX_BODY_SIZE=10m \
     KONG_LUA_SSL_TRUSTED_CERTIFICATE=/etc/ssl/certs/ca-certificates.crt

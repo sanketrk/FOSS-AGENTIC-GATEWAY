@@ -31,6 +31,8 @@ jobs:
           node --check control-plane/static/app.js
           sh -n tests/smoke.sh
           ruby tests/validate-config.rb
+          ruby tests/validate-a2a.rb
+          ruby -ryaml -rjson -e 'c = YAML.load_file("kong/kong.yml"); a = YAML.load_file("examples/a2a-kong.yml"); a["services"][0]["routes"][0]["plugins"][0]["config"]["public_card"] = false; c["services"].concat(a["services"]); File.write("tests/runtime-kong.json", JSON.generate(c))'
           kubectl kustomize deploy/openshift > /tmp/mcp-gateway-rendered.yaml
           ruby -e 'require "yaml"; docs = YAML.load_stream(File.read("/tmp/mcp-gateway-rendered.yaml")); abort "unexpected rendered resource count" unless docs.length == 3'
       - name: Validate optional control plane deployment
@@ -47,23 +49,28 @@ jobs:
       - name: Validate plugin, declarative config, and arbitrary-UID runtime
         run: |
           docker run --rm --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m \
-            --user 12345:0 --volume "$PWD/tests:/tests:ro" --entrypoint /bin/sh mcp-gateway:ci -ec '
+            --user 12345:0 --volume "$PWD/tests:/tests:ro" --volume "$PWD/examples:/examples:ro" --entrypoint /bin/sh mcp-gateway:ci -ec '
               luajit /tests/handler_spec.lua
               luajit /tests/token_exchange_spec.lua
+              luajit /tests/a2a_spec.lua
+              kong config parse /examples/a2a-kong.yml >/dev/null
               kong config parse /tests/exchange-kong.json >/dev/null
               kong config parse /etc/kong/kong.yml >/dev/null
               kong config parse /tests/generated-kong.json >/dev/null
+              kong config parse /tests/runtime-kong.json >/dev/null
               kong prepare
             '
       - name: Start image with restricted filesystem and arbitrary UID
         run: |
           docker run --detach --name mcp-gateway-scc-test --read-only \
             --tmpfs /tmp:rw,nosuid,nodev,size=256m --user 12345:0 \
+            --volume "$PWD/tests/runtime-kong.json:/etc/kong/kong.yml:ro" \
             --publish 127.0.0.1:18100:8100 --publish 127.0.0.1:18000:8000 mcp-gateway:ci
           trap 'docker rm -f mcp-gateway-scc-test >/dev/null 2>&1 || true' EXIT
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:18100/status >/dev/null; then
               python3 tests/routing.py
+              python3 tests/a2a_routing.py
               exit 0
             fi
             sleep 2

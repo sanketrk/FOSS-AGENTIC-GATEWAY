@@ -44,7 +44,7 @@ spec:
             - name: KONG_PREFIX
               value: /tmp/kong
             - name: KONG_PLUGINS
-              value: bundled,mcp-gateway,mcp-token-exchange
+              value: bundled,mcp-gateway,mcp-token-exchange,a2a-gateway
             - name: KONG_NGINX_HTTP_INCLUDE
               value: /etc/kong/nginx-extra.conf
             - name: KONG_NGINX_HTTP_CLIENT_MAX_BODY_SIZE

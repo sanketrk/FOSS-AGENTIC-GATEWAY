@@ -31,6 +31,10 @@ No universal MCP conformance or provider certification is claimed. Live tests st
 
 References: [MCP Streamable HTTP](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http), [MCP authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization), [resource indicators](https://www.rfc-editor.org/rfc/rfc8707), [protected-resource metadata](https://www.rfc-editor.org/rfc/rfc9728), [bearer tokens](https://www.rfc-editor.org/rfc/rfc6750).
 
+## A2A transport profile
+
+The optional [A2A plugin](A2A.md) validates JSON-RPC HTTP requests, version selection, and JWT authorization while proxying Agent Cards and unbuffered responses. It supports 1.0/0.3 transport profiles, with task semantics and card accuracy enforced by upstream agents. It does not implement gRPC, REST, protocol translation, or complete A2A conformance.
+
 ## Migration from provider-specific configuration
 
 Replace `AUTH0_*` variables with generic `OIDC_*` settings as shown in the optional provider example. Replace the old Secret with `mcp-control-plane-oidc`, containing `issuer`, `client-id`, and `client-secret`. Configure a trusted administrator claim explicitly; OIDC login alone never authorizes registry administration. Replace opaque sample audience aliases with each server's public resource URI in the IdP/API configuration and issue fresh tokens before publishing the revised gateway configuration. Review the generated snapshot and verify rollout and authenticated requests.

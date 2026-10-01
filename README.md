@@ -8,6 +8,8 @@ The control-plane authentication and MCP OAuth interfaces use provider-neutral c
 
 An optional [RFC 8693 token-exchange plugin](docs/TOKEN_EXCHANGE.md) exchanges verified gateway access tokens for separate upstream resource tokens. Enable it per route with a trusted STS and mounted client credentials.
 
+An optional [A2A gateway plugin](docs/A2A.md) proxies Agent2Agent JSON-RPC HTTP traffic, Agent Cards, and SSE using separate routes and JWT policies. Its transport profiles cover 1.0 and legacy 0.3.
+
 ## Features
 
 - Kong Gateway OSS 3.9 by default. Supports MCP Streamable HTTP revision `2026-07-28` and configurable legacy compatibility for `2025-11-25` and `2025-03-26`.

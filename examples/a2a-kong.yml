@@ -1,0 +1,34 @@
+_format_version: "3.0"
+_transform: true
+services:
+  - name: a2a-agent-a
+    url: http://a2a-agent-a:3000/rpc
+    retries: 0
+    connect_timeout: 5000
+    read_timeout: 3600000
+    write_timeout: 3600000
+    routes:
+      - name: a2a-agent-a-jsonrpc
+        paths:
+          - "~/a2a/agent-a$"
+          - "~/.well-known/agent-card.json$"
+        strip_path: true
+        path_handling: v0
+        request_buffering: false
+        response_buffering: false
+        plugins:
+          - name: a2a-gateway
+            config:
+              rpc_path: /a2a/agent-a
+              card_path: /.well-known/agent-card.json
+              upstream_card_path: /.well-known/agent-card.json
+              public_card: true
+              audience: https://agents.example.com/a2a/agent-a
+              protocol_versions: ["1.0", "0.3"]
+              authorization_servers:
+                - issuer: https://issuer.example.com/
+                  discovery_url: https://issuer.example.com/.well-known/openid-configuration
+              signing_algorithms: ["RS256"]
+              required_scopes: ["a2a:access"]
+              allowed_origins: []
+              forward_bearer_token: false
