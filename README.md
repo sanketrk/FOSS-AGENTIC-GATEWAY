@@ -49,6 +49,139 @@ The aim is an open collection of useful gateway capabilities that grows through 
 
 The control plane manages MCP, A2A, and token-exchange settings in one publication workflow. The same settings can also be managed as deployment configuration. See the [supported profiles](docs/protocols/interoperability.md), [A2A guide](docs/protocols/a2a.md), and [SDK guide](sdk/python/README.md) for current limits.
 
+## How an agent uses the gateway
+
+An agent connects only to the gateway. It does not need the private address or credentials of another agent or MCP server.
+
+1. An administrator registers the target in the control plane and chooses its protocol, public path, required caller scope, and optional token-exchange policy.
+2. The calling agent creates an SDK `Endpoint` for that public path and asks its identity provider for a gateway token.
+3. The SDK sends the A2A or MCP request to Open Agentic Gateway.
+4. The gateway verifies the caller token. When token exchange is enabled, it asks the trusted identity service for a new token limited to the selected backend, audience, and scopes.
+5. The target verifies the exchanged token and executes the request. It never receives the caller's original broad token.
+
+```text
+Calling agent  →  Open Agentic Gateway  →  Target agent or MCP server
+ caller token       verify + exchange          limited target token
+```
+
+Install the SDK directly from this repository while it is under development:
+
+```sh
+python3 -m pip install -e sdk/python
+```
+
+### Agent calls another agent over A2A
+
+The calling agent supplies the gateway URL, its OAuth client credentials, and the public A2A endpoint registered in the control plane:
+
+```python
+from open_agentic_gateway import Endpoint, GatewayClient, OAuthClientCredentials
+
+tokens = OAuthClientCredentials(
+    token_endpoint="https://identity.example.com/oauth/token",
+    client_id="banking-orchestrator",
+    client_secret="read-from-a-secret-store",
+    ca_file="/credentials/ca.pem",
+)
+
+gateway = GatewayClient(
+    gateway_url="https://gateway.example.com",
+    token_provider=tokens,
+    ca_file="/credentials/ca.pem",
+)
+
+review_agent = Endpoint(
+    path="/a2a/transaction-review",
+    audience="https://gateway.example.com/a2a/transaction-review",
+    scopes=("a2a:review",),
+    protocol="a2a",
+)
+
+response = gateway.send_message(
+    review_agent,
+    "Summarize synthetic merchant purchase DEMO-TX-003.",
+)
+```
+
+`send_message()` obtains the caller token and sends an A2A 1.0 JSON-RPC request through the gateway. For the banking policy, the gateway exchanges that token for one with:
+
+```text
+subject:  banking-orchestrator
+actor:    banking-gateway
+audience: urn:bank:backend:transaction-review
+scope:    review:execute
+```
+
+For the A2A HTTP+JSON/REST binding, use the REST path and binding:
+
+```python
+review_agent_rest = Endpoint(
+    path="/a2a/transaction-review/rest",
+    audience="https://gateway.example.com/a2a/transaction-review",
+    scopes=("a2a:review",),
+    protocol="a2a",
+    binding="HTTP+JSON",
+)
+
+response = gateway.send_message(review_agent_rest, "Review DEMO-TX-003.")
+```
+
+### Agent calls one or more MCP servers
+
+The same client can call a tool through an MCP connection. The SDK reads the gateway's protected-resource metadata, obtains the correct token, performs the MCP initialization sequence, confirms that the tool is advertised, and calls it:
+
+```python
+accounts = Endpoint(
+    path="/mcp/accounts",
+    audience="https://gateway.example.com/mcp/accounts",
+    scopes=("accounts:read",),
+    protocol="mcp",
+)
+
+account = gateway.call_tool(
+    accounts,
+    "get_account_summary",
+    {"account_id": "DEMO-001"},
+)
+```
+
+An agent can call several MCP servers with separate endpoint policies. It receives a different gateway token for each audience, and the gateway obtains a different downscoped backend token for each target:
+
+```python
+transactions = Endpoint(
+    path="/mcp/transactions",
+    audience="https://gateway.example.com/mcp/transactions",
+    scopes=("transactions:read",),
+    protocol="mcp",
+)
+
+account = gateway.call_tool(accounts, "get_account_summary", {"account_id": "DEMO-001"})
+recent = gateway.call_tool(transactions, "list_recent_transactions", {"account_id": "DEMO-001"})
+```
+
+The accounts server receives only `accounts:summary` for `urn:bank:backend:accounts`. The transactions server receives only `transactions:recent` for `urn:bank:backend:transactions`. Neither server receives the other server's permission.
+
+### The target verifies the exchanged token
+
+The receiving agent or MCP server uses the SDK verifier before dispatching business logic:
+
+```python
+from open_agentic_gateway import ExchangeTokenVerifier
+
+verifier = ExchangeTokenVerifier(
+    issuer="https://identity.example.com/",
+    audience="urn:bank:backend:transaction-review",
+    scopes=("review:execute",),
+    gateway_actor="banking-gateway",
+    jwks=trusted_jwks,
+)
+
+claims = verifier.verify(request.headers.get("Authorization"))
+# Execute only after signature, issuer, audience, actor, expiry, and scope pass.
+```
+
+The complete runnable implementation is in the [banking orchestrator](examples/banking/banking-orchestrator/orchestrator.py), [receiving A2A agent](examples/banking/transaction-review-agent/review_agent.py), [accounts MCP server](examples/banking/accounts-mcp-server/accounts_server.py), and [transactions MCP server](examples/banking/transactions-mcp-server/transactions_server.py).
+
 ### Use these plugins with Kong OSS
 
 Our `mcp`, `a2a`, and `token-exchange` plugins are Apache-2.0 source available in this repository. They run on Kong OSS without a Kong Enterprise or AI license. The supplied image includes them alongside the OSS release's bundled plugins.
@@ -157,7 +290,7 @@ cd Open-Agentic-Gateway
 | Run the banking scenarios | [Banking examples](examples/banking/README.md) |
 | Contribute a fix or capability | [Contributing](CONTRIBUTING.md) |
 | Configure and deploy | [Gateway setup](docs/gateway/setup.md) |
-| Manage MCP connections | [Control-plane setup](docs/control-plane/setup.md) |
+| Manage gateway connections and policies | [Control-plane setup](docs/control-plane/setup.md) |
 | Explore the code | [Gateway plugins](gateway/plugins/), [SDK](sdk/python/), [control plane](apps/control-plane/), [tests](tests/) |
 | Find all guides | [Documentation index](docs/README.md) |
 

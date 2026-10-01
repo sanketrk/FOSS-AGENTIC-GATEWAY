@@ -148,4 +148,4 @@ The SDK client permits gateway-relative endpoints over verified HTTPS. Each back
 
 To adapt the examples, configure an exchange-capable OAuth authorization server with separate agent and gateway clients, map gateway audiences/scopes to backend resources/scopes, and replace the fixtures with your actual A2A agent and MCP servers. Configure the gateway with the real HTTPS discovery/token endpoints and trusted CA bundle. The STS and backend must agree on subject/actor claims and enforce their own authorization policies; an OIDC login provider alone does not establish token-exchange support.
 
-These routes are managed through `kong.yml`. The current control-plane publisher generates MCP-only configurations and would remove the manually configured exchange policies and A2A route. Do not publish over this example using the registry UI.
+The Compose demo loads these routes from `kong.yml`. The control plane can model the same MCP, A2A, and token-exchange settings for a managed deployment. Do not publish a separate control-plane draft over a running demo unless that draft includes all three banking connections and their exchange policies.
