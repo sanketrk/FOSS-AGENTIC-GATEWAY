@@ -4,6 +4,14 @@ The `token-exchange` Kong OSS plugin implements outbound [RFC 8693 token exchang
 
 The gateway verifies the incoming token's signature, issuer, public resource audience, expiry, and scopes first. The exchange plugin authenticates to a trusted authorization server/STS and requests a separate upstream token. Only the exchanged token reaches the backend. The original token is sent only to the configured STS as the subject token, with no forwarding fallback.
 
+## Downscoping
+
+Use exchange to give each target only the permissions needed for its operation, even when the original user or agent has many enterprise entitlements. For example, the transaction-review route requests only `review:execute` for `urn:bank:backend:transaction-review`. Unrelated permissions must not appear in the issued backend token.
+
+The gateway's per-route `resource` and `scopes` specify the requested backend access. The STS must authorize those permissions against the subject's entitlements and the gateway client's exchange policy. Gateway client authentication alone must not grant permissions the subject lacks. Incoming and backend scope names can differ, so the STS needs an explicit authorized mapping rather than a simple comparison of scope strings.
+
+This implementation requests a fixed scope set per route and rejects a response that explicitly returns a different set. It does not compute a user's entitlement set or choose scopes dynamically for individual methods. Configure separate routes/policies where different operations need different access, and keep operation-level authorization at the backend. Short token lifetimes are also an STS issuance policy.
+
 ## Configuration
 
 Add this entry to the same route's `plugins` array:

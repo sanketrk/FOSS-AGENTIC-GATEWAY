@@ -14,17 +14,20 @@ Your AI agents → Enterprise gateway → Tools and other agents
 
 - **Simpler connections.** Agents use gateway addresses, while internal service locations stay in gateway configuration.
 - **Control over access.** Configure who can reach each service and which permissions they need.
+- **Only the permission needed for each call.** Token exchange can narrow a caller's broad access to the specific permission a target agent or tool needs.
 - **Less credential management for agents.** With token exchange enabled, agents use their own credentials and the gateway obtains the permission needed for each internal service.
 - **Independence from a single vendor.** Connect services using open standards and configure your identity provider.
 - **A foundation you can own.** Deploy and extend the open-source project inside your infrastructure.
 
 ## Why token exchange matters
 
-Permission to enter the gateway and permission to use an internal service are separate decisions.
+A user may have 100 entitlements across the enterprise. When an agent acts for that user, the target service should receive only the permission needed for that call. This narrowing of access is called **downscoping**.
 
-An agent arrives with permission to call a gateway endpoint. The gateway checks that permission, then asks your identity service for access to the specific backend. The backend checks that access before doing any work.
+For example, a transaction-review agent may need just `review:execute`. The gateway asks your identity service for a token limited to that agent and that permission. Access to payments, customer administration, and other services stays out of the token sent to the target.
 
-This keeps permissions specific to each service. Access to account details does not automatically grant access to transaction history. Agents also avoid holding a separate credential for every backend. With the appropriate identity policy, the backend can identify both the original caller and the gateway acting for it.
+The gateway checks the incoming permission and requests the configured scope for the target. Your identity service must check that the caller is entitled to receive it before issuing the narrower token. The backend then checks the token before doing any work.
+
+This limits what the target can do with the credential it receives. Agents also avoid holding a separate credential for every backend. With the appropriate identity policy, the backend can identify both the original caller and the gateway acting for it.
 
 Token exchange is available as a shared plugin for both tool calls and agent-to-agent calls. Enable it on the routes that need it; the [banking examples](examples/banking/README.md) require it. See the [setup guide](docs/plugins/token-exchange.md) for configuration and identity requirements.
 
@@ -36,7 +39,7 @@ A banking assistant needs to answer a question about an account and a recent pur
 2. Ask the transactions service for recent transactions.
 3. Ask a transaction-review agent to summarize a purchase.
 
-Each service receives its own permission. The examples use synthetic data and demonstrate these connections with four separate components: two agents and two tool servers.
+Each service receives only its configured permission: account summaries, recent transactions, or transaction review. The examples use synthetic data and demonstrate these connections with four separate components: two agents and two tool servers.
 
 [Run the banking examples →](examples/banking/README.md)
 
