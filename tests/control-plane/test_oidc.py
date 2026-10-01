@@ -23,7 +23,7 @@ class OIDCTests(unittest.TestCase):
 
     def setUp(self):
         self.auth = OIDCClient('https://identity.example.com/realms/enterprise', 'client-id', 'private-secret',
-                              'https://foss-agentic-control-plane', 'http://127.0.0.1:8080',
+                              'https://open-agentic-control-plane', 'http://127.0.0.1:8080',
                               admin_claim='/entitlements', admin_value='control-plane:admin', admin_claim_source='access_token')
         self.auth.metadata = {'authorization_endpoint': self.auth.issuer + 'authorize',
                               'token_endpoint': self.auth.issuer + '/token',

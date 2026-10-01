@@ -4,7 +4,7 @@ Help make agent connections a reusable part of the open-source ecosystem. Contri
 
 ## Start with a problem
 
-For a new capability, [open an issue](https://github.com/sanketrk/FOSS-AGENTIC-GATEWAY/issues/new) describing who needs it, a concrete workflow, and the behavior you propose. Include what already exists, what you would add, and how you would demonstrate it. Small fixes and documentation improvements can go straight to a pull request.
+For a new capability, [open an issue](https://github.com/sanketrk/Open-Agentic-Gateway/issues/new) describing who needs it, a concrete workflow, and the behavior you propose. Include what already exists, what you would add, and how you would demonstrate it. Small fixes and documentation improvements can go straight to a pull request.
 
 Shared concerns are good starting points: agent-to-agent observability, access policy, audit, usage controls, discovery, routing, or application integration. Describe which layer your change affects and how it works alongside existing plugins.
 

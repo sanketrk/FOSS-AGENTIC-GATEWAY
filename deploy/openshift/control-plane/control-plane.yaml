@@ -1,38 +1,38 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: foss-agentic-control-plane
+  name: open-agentic-control-plane
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: foss-agentic-control-plane-publisher
+  name: open-agentic-control-plane-publisher
 rules:
   - apiGroups: [""]
     resources: [configmaps]
-    resourceNames: [foss-agentic-gateway-kong]
+    resourceNames: [open-agentic-gateway-kong]
     verbs: [get, patch]
   - apiGroups: [apps]
     resources: [deployments]
-    resourceNames: [foss-agentic-gateway]
+    resourceNames: [open-agentic-gateway]
     verbs: [get, patch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: foss-agentic-control-plane-publisher
+  name: open-agentic-control-plane-publisher
 subjects:
   - kind: ServiceAccount
-    name: foss-agentic-control-plane
+    name: open-agentic-control-plane
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: foss-agentic-control-plane-publisher
+  name: open-agentic-control-plane-publisher
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: foss-agentic-control-plane-data
+  name: open-agentic-control-plane-data
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -42,27 +42,27 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: foss-agentic-control-plane
+  name: open-agentic-control-plane
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: foss-agentic-control-plane
+      app.kubernetes.io/name: open-agentic-control-plane
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: foss-agentic-control-plane
+        app.kubernetes.io/name: open-agentic-control-plane
     spec:
-      serviceAccountName: foss-agentic-control-plane
+      serviceAccountName: open-agentic-control-plane
       securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: control-plane
-          image: foss-agentic-control-plane:latest
+          image: open-agentic-control-plane:latest
           ports:
             - name: http
               containerPort: 8080
@@ -72,17 +72,17 @@ spec:
             - name: OIDC_ISSUER
               valueFrom:
                 secretKeyRef:
-                  name: foss-agentic-control-plane-oidc
+                  name: open-agentic-control-plane-oidc
                   key: issuer
             - name: OIDC_CLIENT_ID
               valueFrom:
                 secretKeyRef:
-                  name: foss-agentic-control-plane-oidc
+                  name: open-agentic-control-plane-oidc
                   key: client-id
             - name: OIDC_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: foss-agentic-control-plane-oidc
+                  name: open-agentic-control-plane-oidc
                   key: client-secret
             - name: OIDC_ADMIN_CLAIM
               value: /roles
@@ -126,16 +126,16 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: foss-agentic-control-plane-data
+            claimName: open-agentic-control-plane-data
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: foss-agentic-control-plane
+  name: open-agentic-control-plane
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: foss-agentic-control-plane
+    app.kubernetes.io/name: open-agentic-control-plane
   ports:
     - name: http
       port: 8080

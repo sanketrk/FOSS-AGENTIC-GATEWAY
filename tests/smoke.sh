@@ -11,8 +11,8 @@ resource_metadata_url="${RESOURCE_METADATA_URL:-${GATEWAY_URL%/}/.well-known/oau
 tmpdir=$(mktemp -d)
 trap 'rm -f "$tmpdir/body" "$tmpdir/headers"; rmdir "$tmpdir"' EXIT HUP INT TERM
 
-body='{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{},"io.modelcontextprotocol/clientInfo":{"name":"foss-agentic-gateway-smoke","version":"1.0.0"}}}}'
-legacy_initialize='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"foss-agentic-gateway-smoke-legacy","version":"1.0.0"}}}'
+body='{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{},"io.modelcontextprotocol/clientInfo":{"name":"open-agentic-gateway-smoke","version":"1.0.0"}}}}'
+legacy_initialize='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"open-agentic-gateway-smoke-legacy","version":"1.0.0"}}}'
 accept='application/json, text/event-stream'
 
 request_status() {

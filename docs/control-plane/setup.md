@@ -56,7 +56,7 @@ Keep the process running and restart it after editing environment settings. `CON
 | `CONTROL_PLANE_PUBLIC_URL` | Public control-plane origin, distinct from MCP resources |
 | `GATEWAY_PUBLIC_URL` | Public gateway origin used for registered MCP resources |
 | `PUBLISH_NAMESPACE` | Optional Kubernetes namespace enabling publication |
-| `PUBLISH_CONFIGMAP`, `PUBLISH_DEPLOYMENT` | Publication targets; default to `foss-agentic-gateway-kong` and `foss-agentic-gateway` |
+| `PUBLISH_CONFIGMAP`, `PUBLISH_DEPLOYMENT` | Publication targets; default to `open-agentic-gateway-kong` and `open-agentic-gateway` |
 
 [Auth0](../providers/auth0.md) is an optional provider configuration example using this same generic client. It is not a built-in dependency. For explicit local development only, `AUTH_MODE=token` retains the shared-token mode with a strong `CONTROL_PLANE_TOKEN`; there is no automatic fallback in OIDC mode.
 
@@ -100,8 +100,8 @@ All `/api/*` routes require a browser session or a signed JWT bearer access toke
 Build/push the images and set their references, `GATEWAY_PUBLIC_URL`, `CONTROL_PLANE_PUBLIC_URL`, and the administrator policy in the manifests. Register the corresponding HTTPS callback and post-logout redirect at your issuer. Load credentials into a Secret:
 
 ```sh
-docker build -t foss-agentic-control-plane:latest apps/control-plane
-oc create secret generic foss-agentic-control-plane-oidc \
+docker build -t open-agentic-control-plane:latest apps/control-plane
+oc create secret generic open-agentic-control-plane-oidc \
   --from-literal=issuer="$OIDC_ISSUER" \
   --from-literal=client-id="$OIDC_CLIENT_ID" \
   --from-literal=client-secret="$OIDC_CLIENT_SECRET"
@@ -110,7 +110,7 @@ oc apply -k deploy/openshift/control-plane
 
 The control plane runs as one replica with a persistent SQLite volume and Recreate strategy. OpenShift supplies its runtime UID. Its dedicated service account can get/patch only the named gateway ConfigMap and Deployment. Kong pods have no service-account token or Admin API listener. The overlay creates no public Route; expose the UI through your private administrator TLS ingress.
 
-Publication updates the ConfigMap and requests a rolling restart through a Deployment annotation. Success means **rollout requested**, not completed. Verify `oc rollout status deployment/foss-agentic-gateway` and authenticated calls before treating a revision as live. Replicas may temporarily run different policies. The two writes are not atomic: after partial failure, inspect cluster state and retry the reviewed revision. Publishing a reviewed empty registry removes all gateway routes. Do not deploy multiple SQLite writers or concurrently manage this ConfigMap with static manifests/GitOps. Back up the database and exported configuration. Automatic rollback and live backend/issuer availability checks are not implemented.
+Publication updates the ConfigMap and requests a rolling restart through a Deployment annotation. Success means **rollout requested**, not completed. Verify `oc rollout status deployment/open-agentic-gateway` and authenticated calls before treating a revision as live. Replicas may temporarily run different policies. The two writes are not atomic: after partial failure, inspect cluster state and retry the reviewed revision. Publishing a reviewed empty registry removes all gateway routes. Do not deploy multiple SQLite writers or concurrently manage this ConfigMap with static manifests/GitOps. Back up the database and exported configuration. Automatic rollback and live backend/issuer availability checks are not implemented.
 
 ## Verification
 

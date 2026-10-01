@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "foss-agentic-gateway-sdk"
+name = "open-agentic-gateway-sdk"
 version = "0.1.0"
 description = "Gateway-only MCP/A2A clients and verification of exchanged backend tokens"
 readme = "README.md"

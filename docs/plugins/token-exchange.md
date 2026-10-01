@@ -22,7 +22,7 @@ Add this entry to the same route's `plugins` array:
     token_endpoint: https://sts.example.com/oauth/token
     gateway_audience: https://mcp.example.com/mcp/server-a
     resource: https://backend.example.com/mcp
-    client_id: foss-agentic-gateway-exchange
+    client_id: open-agentic-gateway-exchange
     client_secret_file: /var/run/secrets/token-exchange/client-secret
     client_auth_method: client_secret_basic
     scopes:
@@ -51,7 +51,7 @@ For an A2A route, use the same exchange configuration with `gateway_audience` ma
 The image and deployment enable `bundled,mcp,a2a,token-exchange`; only an explicit route entry activates exchange. Store credentials outside declarative configuration:
 
 ```sh
-oc create secret generic token-exchange --from-file=client-secret=/path/to/local/client-secret -n foss-agentic-gateway
+oc create secret generic token-exchange --from-file=client-secret=/path/to/local/client-secret -n open-agentic-gateway
 ```
 
 Add a read-only Secret volume to the gateway Deployment and mount it at `/var/run/secrets/token-exchange`. Ensure the arbitrary runtime UID can read the file. Apply route configuration and restart the gateway. The plugin rereads the mounted secret per exchange. Never put credentials in a ConfigMap or repository.

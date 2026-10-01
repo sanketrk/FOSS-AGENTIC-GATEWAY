@@ -67,7 +67,7 @@ MCP clients discover the configured authorization servers through the gateway's 
 ## Build and run
 
 ```sh
-docker build --build-arg KONG_VERSION=3.9.0 -t foss-agentic-gateway:latest -f gateway/Dockerfile .
+docker build --build-arg KONG_VERSION=3.9.0 -t open-agentic-gateway:latest -f gateway/Dockerfile .
 ```
 
 The image installs `lua-resty-openidc` into the Kong/OpenResty Lua runtime. [gateway/config/nginx-extra.conf](../../gateway/config/nginx-extra.conf) defines its `discovery`, `jwks`, and `jwt_verification` shared dictionaries, included by Kong's HTTP configuration. The OpenShift ConfigMap mounts both the declarative Kong config and the matching Nginx include. The Nginx client body limit is 10 MiB; raise it deliberately if the upstream accepts larger MCP requests.
@@ -75,7 +75,7 @@ The image installs `lua-resty-openidc` into the Kong/OpenResty Lua runtime. [gat
 For a local container, first edit `gateway/config/kong.yml` with reachable upstream and OIDC values, then run:
 
 ```sh
-docker run --rm -p 8000:8000 -p 8100:8100 foss-agentic-gateway:latest
+docker run --rm -p 8000:8000 -p 8100:8100 open-agentic-gateway:latest
 ```
 
 The MCP endpoint is `http://localhost:8000/mcp`. The status listener is on port 8100 and is not exposed by the OpenShift Service. Provide a valid bearer JWT in the `Authorization` header. Configure a locally reachable upstream and OIDC issuer first.
@@ -101,35 +101,35 @@ CRC runs a single-node OpenShift cluster for development/testing, not production
 ```sh
 eval "$(crc oc-env)"
 oc login -u developer https://api.crc.testing:6443
-oc project foss-agentic-gateway || oc new-project foss-agentic-gateway
+oc project open-agentic-gateway || oc new-project open-agentic-gateway
 ```
 
 The CRC `developer` account's sample password is `developer`; `crc console --credentials` displays the local cluster credentials if needed. Create a binary Docker build configuration once, then build this checkout into the cluster's internal image registry:
 
 ```sh
-if ! oc get buildconfig foss-agentic-gateway >/dev/null 2>&1; then
-  oc new-build --binary --strategy=docker --name=foss-agentic-gateway --to=foss-agentic-gateway:latest
+if ! oc get buildconfig open-agentic-gateway >/dev/null 2>&1; then
+  oc new-build --binary --strategy=docker --name=open-agentic-gateway --to=open-agentic-gateway:latest
 fi
-oc patch buildconfig foss-agentic-gateway --type=merge \
+oc patch buildconfig open-agentic-gateway --type=merge \
   -p '{"spec":{"strategy":{"dockerStrategy":{"dockerfilePath":"gateway/Dockerfile"}}}}'
-git archive --format=tar -o /tmp/foss-agentic-gateway-build.tar HEAD
-oc start-build foss-agentic-gateway --from-archive=/tmp/foss-agentic-gateway-build.tar --follow
+git archive --format=tar -o /tmp/open-agentic-gateway-build.tar HEAD
+oc start-build open-agentic-gateway --from-archive=/tmp/open-agentic-gateway-build.tar --follow
 ```
 
 Deploy the manifests, select the image built above, and use one replica to fit CRC's single-node memory budget:
 
 ```sh
 oc apply -k deploy/openshift/gateway
-oc set image deployment/foss-agentic-gateway \
-  gateway=image-registry.openshift-image-registry.svc:5000/foss-agentic-gateway/foss-agentic-gateway:latest
-oc scale deployment/foss-agentic-gateway --replicas=1
-oc rollout status deployment/foss-agentic-gateway --timeout=5m
+oc set image deployment/open-agentic-gateway \
+  gateway=image-registry.openshift-image-registry.svc:5000/open-agentic-gateway/open-agentic-gateway:latest
+oc scale deployment/open-agentic-gateway --replicas=1
+oc rollout status deployment/open-agentic-gateway --timeout=5m
 ```
 
 Forward the service from a second terminal, then check the public metadata endpoint:
 
 ```sh
-oc port-forward service/foss-agentic-gateway 18000:8000
+oc port-forward service/open-agentic-gateway 18000:8000
 ```
 
 ```sh

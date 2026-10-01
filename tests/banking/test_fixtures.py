@@ -16,7 +16,7 @@ from unittest.mock import patch
 import jwt
 
 from banking_demo.config import (AGENT_ID, EXCHANGE_ID, ISSUER, POLICIES, ACCESS_TOKEN, EXCHANGE_GRANT)
-from foss_agentic_gateway import GatewayError, OAuthClientCredentials
+from open_agentic_gateway import GatewayError, OAuthClientCredentials
 from banking_demo.prepare import prepare
 from banking_demo.issuer import handler as issuer_handler, public_key, issue
 from review_agent import handler as review_handler

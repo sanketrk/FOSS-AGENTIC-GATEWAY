@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: foss-agentic-gateway-kong
+  name: open-agentic-gateway-kong
   labels:
-    app.kubernetes.io/name: foss-agentic-gateway
+    app.kubernetes.io/name: open-agentic-gateway
 data:
   kong.yml: |
     _format_version: "3.0"

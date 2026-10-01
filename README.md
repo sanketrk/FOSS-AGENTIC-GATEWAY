@@ -8,7 +8,7 @@ Open Agentic Gateway is a place to solve those problems together. It provides an
 
 **Have a shared problem across your agents? Build a plugin here.** Tracing agent-to-agent calls, enforcing usage budgets, discovering tools, or choosing an LLM are examples of capabilities the community could contribute. Today's working foundation covers MCP, A2A, and token exchange.
 
-[Try it](examples/banking/README.md) · [Build with us](CONTRIBUTING.md) · [Propose a capability](https://github.com/sanketrk/FOSS-AGENTIC-GATEWAY/issues/new) · [Deploy it](docs/gateway/setup.md)
+[Try it](examples/banking/README.md) · [Build with us](CONTRIBUTING.md) · [Propose a capability](https://github.com/sanketrk/Open-Agentic-Gateway/issues/new) · [Deploy it](docs/gateway/setup.md)
 
 ## Bring AI gateway capabilities to the open-source community
 
@@ -102,7 +102,7 @@ For example, an observability contribution could demonstrate a trace across two 
 
 **These are contribution directions, not additional features shipped today.** Each needs its own design, configuration, implementation, and tests. The gateway can observe traffic that passes through it; complete workflow traces also need cooperating agents and services.
 
-[Open a proposal](https://github.com/sanketrk/FOSS-AGENTIC-GATEWAY/issues/new) with the problem and a concrete workflow. Documentation fixes, bug reports, and interoperability tests are equally useful contributions. The [contribution guide](CONTRIBUTING.md) explains how to start.
+[Open a proposal](https://github.com/sanketrk/Open-Agentic-Gateway/issues/new) with the problem and a concrete workflow. Documentation fixes, bug reports, and interoperability tests are equally useful contributions. The [contribution guide](CONTRIBUTING.md) explains how to start.
 
 ## Give each target only the access it needs
 
@@ -148,8 +148,8 @@ The examples use synthetic data and include a local identity service, TLS, and b
 ## Get started
 
 ```sh
-git clone https://github.com/sanketrk/FOSS-AGENTIC-GATEWAY.git
-cd FOSS-AGENTIC-GATEWAY
+git clone https://github.com/sanketrk/Open-Agentic-Gateway.git
+cd Open-Agentic-Gateway
 ```
 
 | Start here | Guide |

@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: foss-agentic-gateway
+  name: open-agentic-gateway
   labels:
-    app.kubernetes.io/name: foss-agentic-gateway
+    app.kubernetes.io/name: open-agentic-gateway
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app.kubernetes.io/name: foss-agentic-gateway
+      app.kubernetes.io/name: open-agentic-gateway
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: foss-agentic-gateway
+        app.kubernetes.io/name: open-agentic-gateway
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -21,7 +21,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: gateway
-          image: foss-agentic-gateway:latest
+          image: open-agentic-gateway:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: proxy
@@ -91,7 +91,7 @@ spec:
       volumes:
         - name: kong-config
           configMap:
-            name: foss-agentic-gateway-kong
+            name: open-agentic-gateway-kong
         - name: kong-prefix
           emptyDir:
             sizeLimit: 256Mi

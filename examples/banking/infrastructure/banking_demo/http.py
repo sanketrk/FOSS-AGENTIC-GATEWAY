@@ -2,7 +2,7 @@
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from foss_agentic_gateway import AuthenticationError
+from open_agentic_gateway import AuthenticationError
 
 
 class DemoHandler(BaseHTTPRequestHandler):

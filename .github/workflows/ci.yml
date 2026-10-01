@@ -51,23 +51,23 @@ jobs:
             "client_secret_file" => "/var/run/secrets/token-exchange/client-secret", "scopes" => ["a2a:access"]}}
           File.write("tests/a2a-exchange-kong.json", JSON.generate(agents))
           RUBY
-          kubectl kustomize deploy/openshift/gateway > /tmp/foss-agentic-gateway-rendered.yaml
-          ruby -e 'require "yaml"; docs = YAML.load_stream(File.read("/tmp/foss-agentic-gateway-rendered.yaml")); abort "unexpected rendered resource count" unless docs.length == 3'
+          kubectl kustomize deploy/openshift/gateway > /tmp/open-agentic-gateway-rendered.yaml
+          ruby -e 'require "yaml"; docs = YAML.load_stream(File.read("/tmp/open-agentic-gateway-rendered.yaml")); abort "unexpected rendered resource count" unless docs.length == 3'
       - name: Validate optional control plane deployment
         run: |
-          kubectl kustomize deploy/openshift/control-plane > /tmp/foss-agentic-control-plane-rendered.yaml
+          kubectl kustomize deploy/openshift/control-plane > /tmp/open-agentic-control-plane-rendered.yaml
           ruby tests/validate-control-plane.rb
-          docker build --tag foss-agentic-control-plane:ci apps/control-plane
+          docker build --tag open-agentic-control-plane:ci apps/control-plane
           docker run --rm --read-only --tmpfs /data:rw,nosuid,nodev,size=32m --env TMPDIR=/data --user 12345:0 \
             --volume "$PWD/tests/control-plane/test_app.py:/app/test_app.py:ro" \
-            --volume "$PWD/tests/control-plane/test_oidc.py:/app/test_oidc.py:ro" foss-agentic-control-plane:ci \
+            --volume "$PWD/tests/control-plane/test_oidc.py:/app/test_oidc.py:ro" open-agentic-control-plane:ci \
             python -m unittest -v test_app test_oidc
       - name: Build Kong OSS image
-        run: docker build --build-arg KONG_VERSION=3.9.0 --tag foss-agentic-gateway:ci -f gateway/Dockerfile .
+        run: docker build --build-arg KONG_VERSION=3.9.0 --tag open-agentic-gateway:ci -f gateway/Dockerfile .
       - name: Validate plugin, declarative config, and arbitrary-UID runtime
         run: |
           docker run --rm --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m \
-            --user 12345:0 --volume "$PWD/tests:/tests:ro" --volume "$PWD/examples:/examples:ro" --entrypoint /bin/sh foss-agentic-gateway:ci -ec '
+            --user 12345:0 --volume "$PWD/tests:/tests:ro" --volume "$PWD/examples:/examples:ro" --entrypoint /bin/sh open-agentic-gateway:ci -ec '
               luajit /tests/handler_spec.lua
               luajit /tests/token_exchange_spec.lua
               luajit /tests/a2a_spec.lua
@@ -84,11 +84,11 @@ jobs:
             '
       - name: Start image with restricted filesystem and arbitrary UID
         run: |
-          docker run --detach --name foss-agentic-gateway-scc-test --read-only \
+          docker run --detach --name open-agentic-gateway-scc-test --read-only \
             --tmpfs /tmp:rw,nosuid,nodev,size=256m --user 12345:0 \
             --volume "$PWD/tests/runtime-kong.json:/etc/kong/kong.yml:ro" \
-            --publish 127.0.0.1:18100:8100 --publish 127.0.0.1:18000:8000 foss-agentic-gateway:ci
-          trap 'docker rm -f foss-agentic-gateway-scc-test >/dev/null 2>&1 || true' EXIT
+            --publish 127.0.0.1:18100:8100 --publish 127.0.0.1:18000:8000 open-agentic-gateway:ci
+          trap 'docker rm -f open-agentic-gateway-scc-test >/dev/null 2>&1 || true' EXIT
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:18100/status >/dev/null; then
               python3 tests/routing.py
@@ -97,11 +97,11 @@ jobs:
             fi
             sleep 2
           done
-          docker logs foss-agentic-gateway-scc-test
+          docker logs open-agentic-gateway-scc-test
           exit 1
       - name: Exercise banking examples with real token exchange
         env:
-          BANKING_GATEWAY_IMAGE: foss-agentic-gateway:ci
+          BANKING_GATEWAY_IMAGE: open-agentic-gateway:ci
         run: |
           docker compose -f examples/banking/compose.yml build prepare banking-orchestrator review-agent accounts transactions
           trap 'docker compose -f examples/banking/compose.yml down -v >/dev/null 2>&1 || true' EXIT

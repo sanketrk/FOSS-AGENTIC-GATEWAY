@@ -96,15 +96,15 @@ class PublisherTests(unittest.TestCase):
     def test_configmap_then_rollout(self):
         publisher = object.__new__(KubernetesPublisher)
         publisher.namespace = "test"
-        publisher.configmap = "foss-agentic-gateway-kong"
-        publisher.deployment = "foss-agentic-gateway"
+        publisher.configmap = "open-agentic-gateway-kong"
+        publisher.deployment = "open-agentic-gateway"
         calls = []
         publisher.call = lambda path, data=None: calls.append((path, data)) or {}
         snapshot = {"revision": "reviewed", "config": generate([validate(sample())], "https://gateway.example.com")}
         result = publisher(snapshot)
         self.assertEqual(len(calls), 4)
         self.assertEqual(json.loads(calls[2][1]["data"]["kong.yml"]), snapshot["config"])
-        self.assertEqual(calls[3][1]["spec"]["template"]["metadata"]["annotations"]["foss-agentic-gateway/config-revision"], "reviewed")
+        self.assertEqual(calls[3][1]["spec"]["template"]["metadata"]["annotations"]["open-agentic-gateway/config-revision"], "reviewed")
         self.assertEqual(result["state"], "rollout_requested")
 
     def test_preflight_failure_does_not_mutate(self):

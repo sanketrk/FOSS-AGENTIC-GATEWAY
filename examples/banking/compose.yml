@@ -9,7 +9,7 @@ x-service: &service
 
 x-infrastructure: &infrastructure
   <<: *service
-  image: foss-agentic-banking-infrastructure:local
+  image: open-agentic-banking-infrastructure:local
   build:
     context: ../..
     dockerfile: examples/banking/infrastructure/Dockerfile
@@ -46,7 +46,7 @@ services:
 
   review-agent:
     <<: *service
-    image: foss-agentic-banking-review-agent:local
+    image: open-agentic-banking-review-agent:local
     build:
       context: ../..
       dockerfile: examples/banking/transaction-review-agent/Dockerfile
@@ -56,7 +56,7 @@ services:
 
   accounts:
     <<: *service
-    image: foss-agentic-banking-accounts:local
+    image: open-agentic-banking-accounts:local
     build:
       context: ../..
       dockerfile: examples/banking/accounts-mcp-server/Dockerfile
@@ -66,7 +66,7 @@ services:
 
   transactions:
     <<: *service
-    image: foss-agentic-banking-transactions:local
+    image: open-agentic-banking-transactions:local
     build:
       context: ../..
       dockerfile: examples/banking/transactions-mcp-server/Dockerfile
@@ -75,7 +75,7 @@ services:
     healthcheck: *backend-health
 
   gateway:
-    image: ${BANKING_GATEWAY_IMAGE:-foss-agentic-gateway:banking}
+    image: ${BANKING_GATEWAY_IMAGE:-open-agentic-gateway:banking}
     build:
       context: ../..
       dockerfile: gateway/Dockerfile
@@ -108,7 +108,7 @@ services:
   banking-orchestrator:
     <<: *service
     profiles: [tools]
-    image: foss-agentic-banking-orchestrator:local
+    image: open-agentic-banking-orchestrator:local
     build:
       context: ../..
       dockerfile: examples/banking/banking-orchestrator/Dockerfile

@@ -177,7 +177,7 @@ class Registry:
 
 class KubernetesPublisher:
     """Writes one ConfigMap and requests a rolling deployment; never calls Kong Admin API."""
-    def __init__(self, namespace, configmap="foss-agentic-gateway-kong", deployment="foss-agentic-gateway"):
+    def __init__(self, namespace, configmap="open-agentic-gateway-kong", deployment="open-agentic-gateway"):
         self.namespace, self.configmap, self.deployment = namespace, configmap, deployment
         self.base = "https://" + os.environ["KUBERNETES_SERVICE_HOST"] + ":" + os.environ.get("KUBERNETES_SERVICE_PORT_HTTPS", "443")
         self.account = Path("/var/run/secrets/kubernetes.io/serviceaccount")
@@ -200,8 +200,8 @@ class KubernetesPublisher:
         self.call(deployment)
         self.call(prefix, {"data": {"kong.yml": json.dumps(snapshot["config"], indent=2)}})
         self.call(deployment, {"spec": {"template": {"metadata": {"annotations": {
-            "foss-agentic-gateway/config-revision": snapshot["revision"],
-            "foss-agentic-gateway/publish-time": str(time.time()),
+            "open-agentic-gateway/config-revision": snapshot["revision"],
+            "open-agentic-gateway/publish-time": str(time.time()),
         }}}}})
         return {"state": "rollout_requested", "deployment": self.deployment}
 
@@ -351,8 +351,8 @@ def main():
     database = os.environ.get("REGISTRY_DATABASE", "registry.sqlite3")
     namespace = os.environ.get("PUBLISH_NAMESPACE")
     publisher = KubernetesPublisher(namespace,
-        configmap=os.environ.get("PUBLISH_CONFIGMAP", "foss-agentic-gateway-kong"),
-        deployment=os.environ.get("PUBLISH_DEPLOYMENT", "foss-agentic-gateway")) if namespace else None
+        configmap=os.environ.get("PUBLISH_CONFIGMAP", "open-agentic-gateway-kong"),
+        deployment=os.environ.get("PUBLISH_DEPLOYMENT", "open-agentic-gateway")) if namespace else None
     registry = Registry(database, os.environ["GATEWAY_PUBLIC_URL"], publisher)
     server = ThreadingHTTPServer((os.environ.get("CONTROL_PLANE_HOST", "127.0.0.1"), int(os.environ.get("PORT", "8080"))), handler(registry, token=token, oidc=oidc))
     server.serve_forever()

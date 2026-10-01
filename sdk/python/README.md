@@ -9,7 +9,7 @@ python -m pip install ./sdk/python
 ## Caller: use the gateway
 
 ```python
-from foss_agentic_gateway import Endpoint, GatewayClient, OAuthClientCredentials
+from open_agentic_gateway import Endpoint, GatewayClient, OAuthClientCredentials
 
 provider = OAuthClientCredentials(
     token_endpoint="https://issuer.example.com/token",
@@ -46,7 +46,7 @@ The client has only agent credentials. It does not call the exchange grant or ho
 ## Backend: mandate the exchange policy before dispatch
 
 ```python
-from foss_agentic_gateway import ExchangeTokenVerifier, AuthenticationError
+from open_agentic_gateway import ExchangeTokenVerifier, AuthenticationError
 
 verifier = ExchangeTokenVerifier(
     issuer="https://issuer.example.com/",

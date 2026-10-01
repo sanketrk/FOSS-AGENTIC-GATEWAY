@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from foss_agentic_gateway import Endpoint, GatewayClient, OAuthClientCredentials
+from open_agentic_gateway import Endpoint, GatewayClient, OAuthClientCredentials
 from banking_demo.config import ISSUER, GATEWAY, AGENT_ID, POLICIES
 
 

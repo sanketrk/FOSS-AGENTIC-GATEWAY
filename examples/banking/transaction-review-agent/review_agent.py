@@ -4,7 +4,7 @@ import os
 import uuid
 from pathlib import Path
 
-from foss_agentic_gateway import ExchangeTokenVerifier
+from open_agentic_gateway import ExchangeTokenVerifier
 from banking_demo.config import ISSUER, AGENT_ID, EXCHANGE_ID, POLICIES
 from banking_demo.http import backend_handler, receipt, run
 

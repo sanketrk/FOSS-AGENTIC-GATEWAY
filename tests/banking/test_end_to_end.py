@@ -2,7 +2,7 @@
 import os
 import unittest
 
-from foss_agentic_gateway import GatewayClient, GatewayError
+from open_agentic_gateway import GatewayClient, GatewayError
 from banking_demo.config import AGENT_ID, EXCHANGE_ID, GATEWAY, POLICIES
 
 

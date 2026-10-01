@@ -7,7 +7,7 @@ from unittest.mock import patch
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from foss_agentic_gateway import AuthenticationError, Endpoint, ExchangeTokenVerifier, GatewayClient, GatewayError
+from open_agentic_gateway import AuthenticationError, Endpoint, ExchangeTokenVerifier, GatewayClient, GatewayError
 
 
 class ExchangeVerificationTests(unittest.TestCase):

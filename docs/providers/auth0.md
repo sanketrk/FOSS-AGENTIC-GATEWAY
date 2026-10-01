@@ -4,7 +4,7 @@ The application uses a generic OIDC client. This guide supplies an Auth0 configu
 
 ## Tenant setup
 
-1. Under **Applications → Applications**, create a **Regular Web Application** named `FOSS Agentic Control Plane` for authorization code flow. Enable the intended login connection under the application's **Connections** tab.
+1. Under **Applications → Applications**, create a **Regular Web Application** named `Open Agentic Control Plane` for authorization code flow. Enable the intended login connection under the application's **Connections** tab.
 2. In the application's **Settings**, register these exact local URLs and save:
 
    | Setting | Local value |
@@ -14,9 +14,9 @@ The application uses a generic OIDC client. This guide supplies an Auth0 configu
 
    `localhost` and `127.0.0.1` are different hosts. For deployment, use the actual HTTPS control-plane origin plus `/auth/callback` and `/`, respectively.
 3. Copy the exact **Domain**, **Client ID**, and private **Client Secret**. Construct `OIDC_ISSUER` as `https://<Domain>/`, retaining the trailing slash. Match token endpoint authentication to `client_secret_post` for the configuration below. Keep the secret only in the ignored local file or a deployment Secret.
-4. Under **Applications → APIs**, create an API named `FOSS Agentic Control Plane` with identifier **`https://foss-agentic-control-plane`** (no trailing slash) and **RS256** signing. This identifier is a logical audience and need not resolve as a website. It must exactly match both `OIDC_API_AUDIENCE` and the `audience` in `OIDC_AUTHORIZATION_PARAMS`.
+4. Under **Applications → APIs**, create an API named `Open Agentic Control Plane` with identifier **`https://open-agentic-control-plane`** (no trailing slash) and **RS256** signing. This identifier is a logical audience and need not resolve as a website. It must exactly match both `OIDC_API_AUDIENCE` and the `audience` in `OIDC_AUTHORIZATION_PARAMS`.
 5. In the API's **Permissions** tab, add `control-plane:admin`. In **Settings**, enable **RBAC** and **Add Permissions in the Access Token**, then save.
-6. Configure application authorization separately from user authorization. For this API's **User-delegated Access**, select **Per-app authorization** under **Settings → Application Access Policy**. Under **Application Access**, click **Edit** beside the regular web application `FOSS Agentic Control Plane`, select **Grant Access** for **User-delegated Access**, select `control-plane:admin`, and save. Its granted count should be **1 / 1** when this is the API's only permission. Browser login uses user-delegated access; granting **Client Access** alone does not enable it. Machine-to-machine access is not needed for this login setup.
+6. Configure application authorization separately from user authorization. For this API's **User-delegated Access**, select **Per-app authorization** under **Settings → Application Access Policy**. Under **Application Access**, click **Edit** beside the regular web application `Open Agentic Control Plane`, select **Grant Access** for **User-delegated Access**, select `control-plane:admin`, and save. Its granted count should be **1 / 1** when this is the API's only permission. Browser login uses user-delegated access; granting **Client Access** alone does not enable it. Machine-to-machine access is not needed for this login setup.
 7. Under **User Management → Roles**, create an administrator role, add this API's `control-plane:admin` permission, and assign it to your intended application login user under **User Management → Users**. Being an Auth0 Dashboard administrator does not grant application administrator permissions. Do not grant Auth0 Management API privileges to the control-plane application.
 
 See [Auth0 RBAC](https://auth0.com/docs/get-started/apis/enable-role-based-access-control-for-apis) and [authorization code login](https://auth0.com/docs/get-started/authentication-and-authorization-flow/authorization-code-flow/add-login-auth-code-flow).
@@ -34,11 +34,11 @@ OIDC_CLIENT_ID=YOUR-CLIENT-ID
 OIDC_CLIENT_SECRET=YOUR-PRIVATE-CLIENT-SECRET
 OIDC_SCOPES="openid profile email control-plane:admin"
 OIDC_TOKEN_AUTH_METHOD=client_secret_post
-OIDC_API_AUDIENCE=https://foss-agentic-control-plane
+OIDC_API_AUDIENCE=https://open-agentic-control-plane
 OIDC_ADMIN_CLAIM_SOURCE=access_token
 OIDC_ADMIN_CLAIM=/permissions
 OIDC_ADMIN_VALUE=control-plane:admin
-OIDC_AUTHORIZATION_PARAMS='{"audience":"https://foss-agentic-control-plane"}'
+OIDC_AUTHORIZATION_PARAMS='{"audience":"https://open-agentic-control-plane"}'
 CONTROL_PLANE_PUBLIC_URL=http://127.0.0.1:8080
 GATEWAY_PUBLIC_URL=https://mcp.company.com
 REGISTRY_DATABASE=apps/control-plane/registry.sqlite3
@@ -70,7 +70,7 @@ The callback currently returns a generic `Login was declined` when the provider 
 | Symptom or provider error | What to check |
 | --- | --- |
 | Callback URL mismatch | Save the exact `http://127.0.0.1:8080/auth/callback` in the selected application's Allowed Callback URLs. Use the matching Client ID and browser origin. |
-| `Service not found: https://foss-agentic-control-plane` | Create the API in the same tenant, or align both audience settings with its exact Identifier. A web application alone does not create this API. |
+| `Service not found: https://open-agentic-control-plane` | Create the API in the same tenant, or align both audience settings with its exact Identifier. A web application alone does not create this API. |
 | Client is not authorized to access the resource server | Grant the regular web application User-delegated Access to this API and select `control-plane:admin`. With per-app authorization, defining the permission alone is insufficient. |
 | `Administrator authorization required` | Check the login user's role, API RBAC, Add Permissions in the Access Token, and the configured `/permissions` claim policy. Begin a fresh login after changes. |
 | Identity provider unavailable or login failed | Check the issuer, credentials, token endpoint authentication method, TLS/network reachability, and provider logs. |

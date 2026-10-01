@@ -152,7 +152,7 @@ class GatewayClient:
             raise GatewayError("Invalid MCP protected-resource metadata")
         token = self.token_provider.get_token(endpoint.audience, endpoint.scopes)
         initialized = self._rpc(endpoint, token, "initialize", {"protocolVersion": "2025-11-25",
-            "capabilities": {}, "clientInfo": {"name": "foss-agentic-gateway-sdk", "version": "0.1.0"}})
+            "capabilities": {}, "clientInfo": {"name": "open-agentic-gateway-sdk", "version": "0.1.0"}})
         if initialized.get("protocolVersion") != "2025-11-25": raise GatewayError("Unsupported MCP version")
         self._rpc(endpoint, token, "notifications/initialized", {}, notification=True)
         tools = self._rpc(endpoint, token, "tools/list", {})["tools"]
