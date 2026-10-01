@@ -27,18 +27,31 @@ The aim is an open collection of useful gateway capabilities that grows through 
 
 ```mermaid
 flowchart LR
-    A["Your AI agents"] --> G["FOSS-AGENTIC-GATEWAY<br/>Route calls · Check access"]
-    C["Administrator control plane"] -. "Manage MCP connections" .-> G
-    G --> M["MCP servers<br/>Enterprise tools and data"]
-    G --> B["A2A agents<br/>Specialist workflows"]
-    G -. "Request backend permission" .-> I["Identity service<br/>Token exchange"]
+    callerAgent["Caller agent"]
+    subgraph gatewayProcess["FOSS-AGENTIC-GATEWAY"]
+        verifyCaller["Verify caller and select target"]
+        exchangePlugin["Token-exchange plugin"]
+        forwardCall["Forward request with new token"]
+        verifyCaller --> exchangePlugin
+        exchangePlugin -->|"Target token received"| forwardCall
+    end
+    identityService["Trusted identity service"]
+    calleeAgent["Callee agent: verify token, then execute"]
+    mcpServer["MCP server: verify token, then execute"]
+    callerAgent -->|"Request and caller token"| verifyCaller
+    exchangePlugin -->|"Request target audience and only required scopes"| identityService
+    identityService -->|"Authorize and mint a new limited token"| exchangePlugin
+    forwardCall -->|"A2A request and target-only token"| calleeAgent
+    forwardCall -->|"MCP request and target-only token"| mcpServer
     classDef caller fill:#eff6ff,stroke:#2563eb,color:#172554
     classDef gateway fill:#eef2ff,stroke:#6366f1,color:#312e81
-    classDef service fill:#ecfdf5,stroke:#059669,color:#064e3b
-    class A,C caller
-    class G gateway
-    class M,B,I service
+    classDef target fill:#ecfdf5,stroke:#059669,color:#064e3b
+    class callerAgent caller
+    class verifyCaller,exchangePlugin,forwardCall gateway
+    class identityService,calleeAgent,mcpServer target
 ```
+
+*This flow shows authenticated calls with token exchange enabled. The plugin runs inside the gateway. The identity service mints the token; the gateway sends it to the selected callee.*
 
 ## What is available today?
 
@@ -65,26 +78,26 @@ See the [Kong Plugin Hub](https://developer.konghq.com/plugins/) for upstream av
 Choose the behavior a connection needs. An MCP route uses the tool plugin; an A2A route uses the agent plugin. Either can add the same token-exchange plugin. That shared capability can improve without rebuilding both protocols.
 
 ```mermaid
-flowchart LR
-    A["Agent request"] --> R{"Configured route"}
-    subgraph P["Protocol plugins"]
-        M["mcp<br/>Tool protocol + access checks"]
-        B["a2a<br/>Agent protocol + access checks"]
-    end
-    R --> M
-    R --> B
-    M --> X["token-exchange<br/>Obtain limited backend access"]
-    B --> X
-    X --> T["Target service<br/>Check permission · Perform work"]
-    classDef route fill:#eff6ff,stroke:#2563eb,color:#172554
-    classDef plugin fill:#eef2ff,stroke:#6366f1,color:#312e81
-    classDef target fill:#ecfdf5,stroke:#059669,color:#064e3b
-    class A,R route
-    class M,B,X plugin
-    class T target
+sequenceDiagram
+    participant CallerAgent
+    participant Gateway
+    participant TokenExchangePlugin
+    participant IdentityService
+    participant CalleeAgent
+    CallerAgent->>Gateway: Request and caller token
+    Gateway->>Gateway: Select route and verify caller through MCP or A2A plugin
+    Gateway->>TokenExchangePlugin: Verified token, target, and required scopes
+    TokenExchangePlugin->>IdentityService: Exchange caller token for limited target access
+    IdentityService->>IdentityService: Check entitlement and mint a new token
+    IdentityService-->>TokenExchangePlugin: New token for target with only authorized required scopes
+    TokenExchangePlugin-->>Gateway: Replace outgoing bearer token
+    Gateway->>CalleeAgent: Original request and new limited token
+    CalleeAgent->>CalleeAgent: Verify token and permission, then execute
+    CalleeAgent-->>Gateway: Result
+    Gateway-->>CallerAgent: Result
 ```
 
-*The diagram shows exchange-enabled routes. Token exchange is optional in the base gateway.*
+The same exchange plugin serves MCP and A2A routes. The callee receives the new token for its own audience and required scopes. The original caller token is used for exchange and is not forwarded to the callee. If verification or exchange fails, the request is blocked. Token exchange is optional in the base gateway.
 
 A new capability can follow the same approach: a focused plugin, clear configuration, and an example others can run. Contributors implement, package, and test new plugins using Kong's plugin mechanism. The [contribution guide](CONTRIBUTING.md#adding-a-plugin) explains the steps.
 
@@ -113,25 +126,34 @@ For example, an observability contribution could demonstrate a trace across two 
 
 A user may have **100 enterprise entitlements**. A transaction-review agent may need **just one**: `review:execute`.
 
-Token exchange lets the gateway request a separate token for that target with only its configured permission. This is **downscoping**. Your identity service checks that the caller is entitled to the permission; the target validates the token before acting.
+The gateway invokes the token-exchange plugin to obtain a new token for that target, carrying only the permission required for the call. This is **downscoping**. The plugin requests that access from your trusted identity service, which checks the caller's entitlement and mints the token. The gateway forwards the request with the new token; the callee verifies it before execution.
 
 ```mermaid
 flowchart LR
-    U["User<br/>100 enterprise entitlements"] --> A["Calling agent<br/>Acts for the user"]
-    A --> G["Gateway<br/>Checks incoming access"]
-    G --> S["Identity service<br/>Checks entitlement<br/>Issues a limited token"]
-    S --> T["Gateway forwards to<br/>transaction-review agent<br/>Only review:execute"]
+    userIdentity["User: 100 enterprise entitlements"] -->|"Acts for user"| callerAgent["Calling agent"]
+    subgraph gatewayProcess["Gateway"]
+        verifyCall["Verify call to transaction-review agent"]
+        exchangePlugin["Token-exchange plugin: request review:execute only"]
+        forwardCall["Forward request with limited token"]
+        verifyCall --> exchangePlugin
+        exchangePlugin -->|"New token returned"| forwardCall
+    end
+    callerAgent -->|"Request and caller token"| verifyCall
+    identityService["Identity service: check entitlement and mint target token"]
+    exchangePlugin -->|"Target and required scope"| identityService
+    identityService -->|"Audience: transaction-review agent; scope: review:execute"| exchangePlugin
+    forwardCall -->|"Request and review:execute token"| calleeAgent["Transaction-review agent: verify, then review"]
     classDef caller fill:#eff6ff,stroke:#2563eb,color:#172554
-    classDef policy fill:#eef2ff,stroke:#6366f1,color:#312e81
-    classDef limited fill:#ecfdf5,stroke:#059669,color:#064e3b
-    class U,A caller
-    class G,S policy
-    class T limited
+    classDef gateway fill:#eef2ff,stroke:#6366f1,color:#312e81
+    classDef target fill:#ecfdf5,stroke:#059669,color:#064e3b
+    class userIdentity,callerAgent caller
+    class verifyCall,exchangePlugin,forwardCall gateway
+    class identityService,calleeAgent target
 ```
 
-The target receives limited access, while permissions for unrelated services stay out of its token. With the appropriate identity policy, it can also identify the original caller and the gateway acting for them.
+**The transaction-review agent receives only `review:execute` for its own audience.** Permissions for payments, customer administration, and unrelated services are excluded from that token. With the appropriate identity policy, the callee can also identify the original caller and the gateway acting for them.
 
-Today, requested scopes are configured per route, and the identity service owns entitlement decisions. The [token-exchange guide](docs/plugins/token-exchange.md) covers setup and enforcement.
+The permission set must be relevant to the target and operation. Today, the plugin requests scopes configured for the selected route; the identity service must enforce the narrow issuance policy. Automatic selection of scopes from individual request content is a future policy extension. The [token-exchange guide](docs/plugins/token-exchange.md) covers setup and enforcement.
 
 ## Try a complete banking workflow
 

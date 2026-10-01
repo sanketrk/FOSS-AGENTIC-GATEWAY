@@ -13,12 +13,14 @@ All account and transaction data is synthetic. The orchestrator and review agent
 ## What runs
 
 ```text
-Banking orchestrator ── HTTPS ── Gateway ── backend token ── Transaction-review agent
-                                   │
-                                   ├── backend token ──── Accounts MCP server
-                                   ├── backend token ──── Transactions MCP server
-                                   │
-                                   └── HTTPS / token exchange ── Local issuer + STS fixture
+Banking orchestrator -> Gateway: request + caller token
+Gateway -> Token-exchange plugin: verified caller + selected target + required scope
+Token-exchange plugin -> Local STS: request a new token for that target and scope
+Local STS -> Token-exchange plugin: authorize and mint limited backend token
+Token-exchange plugin -> Gateway: replace outgoing token
+Gateway -> Selected agent or MCP server: request + limited backend token
+Selected backend: verify token and permission, then execute
+Selected backend -> Gateway -> Banking orchestrator: result
 ```
 
 The local OAuth issuer signs short-lived gateway JWTs and implements client credentials, discovery/JWKS, and the token-exchange requests needed here. It is a test fixture, not a complete OIDC provider. TLS uses a generated demo CA that containers explicitly trust; verification stays enabled. No external IdP or preexisting credentials are required.
