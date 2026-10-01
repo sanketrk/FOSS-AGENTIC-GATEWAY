@@ -27,7 +27,7 @@ Agents connect to one public gateway host and select a registered server endpoin
 | `/mcp/server-a` | `mcp-server-a:3000/mcp` | `mcp-server-a` | `mcp:server-a:access` |
 | `/mcp/server-b` | `mcp-server-b:3000/mcp` | `mcp-server-b` | `mcp:server-b:access` |
 
-These are generic placeholders. The `services` list in `kong/kong.yml` is the declarative server registry. Add a service and route for each actual MCP server, with its upstream URL and independent plugin configuration. Update the embedded configuration in `deploy/openshift/kong-config.yaml` to match; validation checks both copies. Registry changes require a controlled configuration rollout; there is no runtime registration API.
+These are generic placeholders. The `services` list in `kong/kong.yml` is the declarative server registry. Add a service and route for each actual MCP server, with its upstream URL and independent plugin configuration. Update the embedded configuration in `deploy/openshift/kong-config.yaml` to match; validation checks both copies. For file-managed deployments, registry changes require a controlled configuration rollout. The optional [control plane](control-plane/README.md) adds an authenticated registration API, browser UI, SQLite persistence, and explicit publish workflow.
 
 Configure agents with the public endpoint(s) they may access, never the backend URL. The identity provider must issue tokens with the endpoint's configured audience and scopes. A token for server A is rejected at server B unless it explicitly satisfies server B's policy. Policies govern access to a whole server; tool-level authorization remains the upstream's responsibility.
 
@@ -45,6 +45,12 @@ MCP_PATH=/mcp/server-a \
 ACCESS_TOKEN="$ACCESS_TOKEN" \
 sh tests/smoke.sh
 ```
+
+## Registration API and control plane UI
+
+The optional [lightweight control plane](control-plane/README.md) lets administrators register, edit, and remove MCP servers, review a generated gateway configuration, and publish it through an OpenShift rollout. Registration changes remain drafts until published. The control plane uses a separate administrator token; agents still authenticate with OAuth at the gateway. Kong's Admin API remains disabled.
+
+Run it locally with Python or deploy the optional `deploy/control-plane` overlay. See its [setup, API, and publication documentation](control-plane/README.md) for instructions and rollout limitations.
 
 ## Configure
 

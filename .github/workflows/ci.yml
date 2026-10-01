@@ -14,10 +14,21 @@ jobs:
           version: v1.32.0
       - name: Validate repository configuration
         run: |
+          python3 -m unittest discover -s control-plane -v
+          PYTHONPATH=control-plane python3 -c 'import json; from app import generate, validate; from test_app import sample; open("tests/generated-kong.json", "w").write(json.dumps(generate([validate(sample())], "https://mcp.example.com")))'
+          node --check control-plane/static/app.js
           sh -n tests/smoke.sh
           ruby tests/validate-config.rb
           kubectl kustomize deploy/openshift > /tmp/mcp-gateway-rendered.yaml
           ruby -e 'require "yaml"; docs = YAML.load_stream(File.read("/tmp/mcp-gateway-rendered.yaml")); abort "unexpected rendered resource count" unless docs.length == 3'
+      - name: Validate optional control plane deployment
+        run: |
+          kubectl kustomize deploy/control-plane > /tmp/mcp-control-plane-rendered.yaml
+          ruby tests/validate-control-plane.rb
+          docker build --tag mcp-control-plane:ci control-plane
+          docker run --rm --read-only --tmpfs /data:rw,nosuid,nodev,size=32m --env TMPDIR=/data --user 12345:0 \
+            --volume "$PWD/control-plane/test_app.py:/app/test_app.py:ro" mcp-control-plane:ci \
+            python -m unittest -v test_app
       - name: Build Kong OSS image
         run: docker build --build-arg KONG_VERSION=3.9.0 --tag mcp-gateway:ci .
       - name: Validate plugin, declarative config, and arbitrary-UID runtime
@@ -26,6 +37,7 @@ jobs:
             --user 12345:0 --volume "$PWD/tests:/tests:ro" --entrypoint /bin/sh mcp-gateway:ci -ec '
               luajit /tests/handler_spec.lua
               kong config parse /etc/kong/kong.yml >/dev/null
+              kong config parse /tests/generated-kong.json >/dev/null
               kong prepare
             '
       - name: Start image with restricted filesystem and arbitrary UID

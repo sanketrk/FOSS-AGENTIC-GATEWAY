@@ -5,3 +5,7 @@
 *.log
 *.pem
 *.key
+__pycache__/
+*.sqlite3
+*.sqlite3-*
+tests/generated-kong.json

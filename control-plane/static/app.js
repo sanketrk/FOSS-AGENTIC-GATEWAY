@@ -1,0 +1,76 @@
+'use strict';
+let token = '', records = [], revision = '', config = null, editing = false;
+const $ = id => document.getElementById(id);
+const node = (tag, text, cls) => { const el = document.createElement(tag); el.textContent = text; if (cls) el.className = cls; return el; };
+async function api(path, method = 'GET', data) {
+  const response = await fetch('/api/' + path, {method, headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}, body: data === undefined ? undefined : JSON.stringify(data)});
+  const value = await response.json();
+  if (!response.ok) throw new Error(value.error || 'Request failed');
+  return value;
+}
+function message(text) { $('message').textContent = text; }
+async function refresh() {
+  const [registry, status] = await Promise.all([api('servers'), api('status')]);
+  records = registry.servers;
+  $('gateway-url').textContent = registry.public_url;
+  $('publish-state').textContent = status.published?.revision === status.draft_revision ? 'Published configuration matches this draft' : 'Draft configuration · unpublished changes';
+  $('publish').disabled = !status.publish_enabled || !records.length;
+  $('publish').title = status.publish_enabled ? '' : 'Publishing requires Kubernetes configuration. Download the config instead.';
+  $('servers').replaceChildren();
+  if (!records.length) $('servers').append(node('p', 'No servers registered. Add your first MCP server to get started.', 'empty'));
+  for (const server of records) {
+    const card = node('article', '', 'card');
+    card.append(node('span', 'REGISTERED · DRAFT', 'eyebrow'), node('h2', server.name), node('p', '/mcp/' + server.id, 'endpoint'), node('p', server.upstream_url, 'muted small'), node('p', 'Audience: ' + server.audience, 'small'), node('p', 'Scopes: ' + server.required_scopes.join(', '), 'small'));
+    const actions = node('div', '', 'actions');
+    const edit = node('button', 'Edit policy'); edit.onclick = () => openEditor(server);
+    const remove = node('button', 'Remove', 'danger'); remove.onclick = async () => {
+      if (!confirm('Remove ' + server.name + ' from the draft? Publish afterward to remove its gateway route.')) return;
+      try { await api('servers/' + server.id, 'DELETE'); await refresh(); message('Server removed from draft.'); } catch (err) { message(err.message); }
+    };
+    actions.append(edit, remove); card.append(actions); $('servers').append(card);
+  }
+  $('events').replaceChildren();
+  for (const event of status.events) $('events').append(node('p', new Date(event.timestamp * 1000).toLocaleString() + ' · ' + event.action + ' · ' + (event.details.server || event.details.revision?.slice(0, 12) || ''), 'small muted'));
+  if (!status.events.length) $('events').append(node('p', 'No registry changes yet.', 'muted small'));
+}
+function openEditor(server) {
+  editing = !!server; $('server-form').reset(); $('editor-error').textContent = '';
+  $('editor-title').textContent = editing ? 'Edit server policy' : 'Register server';
+  const form = $('server-form');
+  form.elements.id.disabled = editing;
+  if (server) for (const [key, value] of Object.entries(server)) {
+    if (key === 'legacy_enabled') form.elements[key].checked = value;
+    else form.elements[key].value = Array.isArray(value) ? value.join(key === 'allowed_origins' ? '\n' : ' ') : value;
+  }
+  $('editor').showModal();
+}
+$('login-form').onsubmit = async event => {
+  event.preventDefault(); token = $('token').value;
+  try { await refresh(); $('token').value = ''; $('login').hidden = true; $('workspace').hidden = false; $('logout').hidden = false; message(''); }
+  catch (err) { token = ''; message(err.message); }
+};
+$('logout').onclick = () => { token = ''; records = []; config = null; revision = ''; $('servers').replaceChildren(); $('events').replaceChildren(); $('config').textContent = ''; $('server-form').reset(); $('workspace').hidden = true; $('login').hidden = false; $('logout').hidden = true; message('Signed out.'); };
+$('new-server').onclick = () => openEditor();
+$('close-editor').onclick = () => $('editor').close();
+$('close-preview').onclick = () => $('preview').close();
+$('server-form').onsubmit = async event => {
+  event.preventDefault(); const form = $('server-form'), data = {};
+  for (const key of ['id', 'name', 'upstream_url', 'issuer', 'discovery_url', 'audience']) data[key] = form.elements[key].value.trim();
+  data.required_scopes = form.elements.required_scopes.value.trim().split(/\s+/).filter(Boolean);
+  data.allowed_origins = form.elements.allowed_origins.value.split('\n').map(v => v.trim()).filter(Boolean);
+  data.legacy_enabled = form.elements.legacy_enabled.checked;
+  try { await api('servers' + (editing ? '/' + data.id : ''), editing ? 'PUT' : 'POST', data); $('editor').close(); await refresh(); message('Draft saved. Review and publish to update the gateway.'); }
+  catch (err) { $('editor-error').textContent = err.message; }
+};
+$('review').onclick = async () => {
+  try { const snapshot = await api('preview'); revision = snapshot.revision; config = snapshot.config; $('config').textContent = JSON.stringify(config, null, 2); $('publish-error').textContent = ''; $('preview').showModal(); }
+  catch (err) { message(err.message); }
+};
+$('download').onclick = () => { const link = document.createElement('a'), url = URL.createObjectURL(new Blob([JSON.stringify(config, null, 2)], {type: 'application/json'})); link.href = url; link.download = 'kong.json'; link.click(); URL.revokeObjectURL(url); };
+$('publish').onclick = async () => {
+  if (!confirm('Replace the gateway configuration with this reviewed draft and start a rollout?')) return;
+  $('publish').disabled = true;
+  try { await api('publish', 'POST', {revision}); $('preview').close(); await refresh(); message('Rollout requested. Check deployment readiness before considering this revision live.'); }
+  catch (err) { $('publish-error').textContent = err.message; }
+  finally { if (records.length) $('publish').disabled = false; }
+};
