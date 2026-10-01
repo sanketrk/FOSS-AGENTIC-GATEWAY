@@ -2,11 +2,11 @@
 
 **Build the gateway your agents need. Share the capabilities everyone can use.**
 
-AI agents need tools, other agents, and permission to act. Every team encounters the same connection problems: how to reach a service, check access, and give it only the permissions it needs.
+AI agents need tools, other agents, and permission to act. As workflows grow, teams also need to understand what happened across those connections, control usage, and decide where requests should go. These shared concerns recur across projects.
 
 FOSS-AGENTIC-GATEWAY is a place to solve those problems together. It provides an open gateway built on Kong OSS, with reusable plugins for MCP, A2A, and token exchange. Run it for your own workflows, improve an existing capability, or contribute the next plugin.
 
-**Need a gateway that chooses the right LLM for a task? Bring that idea here.** Automatic model routing is an extension we invite the community to design and build; today's working foundation covers agent and tool connections.
+**Have a shared problem across your agents? Build a plugin here.** Tracing agent-to-agent calls, enforcing usage budgets, discovering tools, or choosing an LLM are examples of capabilities the community could contribute. Today's working foundation covers MCP, A2A, and token exchange.
 
 [Try it](examples/banking/README.md) · [Build with us](CONTRIBUTING.md) · [Propose a capability](https://github.com/sanketrk/FOSS-AGENTIC-GATEWAY/issues/new) · [Deploy it](docs/gateway/setup.md)
 
@@ -54,7 +54,7 @@ A2A and token-exchange settings currently use deployment configuration. See the 
 
 ### And Kong's many plugins?
 
-Kong's catalog includes OSS plugins and commercially licensed features. They are not all available in OSS: its [OpenID Connect plugin](https://developer.konghq.com/plugins/openid-connect/) is marked Enterprise-only, and [AI Proxy Advanced](https://developer.konghq.com/plugins/ai-proxy-advanced/) requires an AI license.
+Kong offers plugins you can use with Kong OSS and additional plugins that require a paid license. Its [OpenID Connect plugin](https://developer.konghq.com/plugins/openid-connect/) requires Kong Enterprise, and [AI Proxy Advanced](https://developer.konghq.com/plugins/ai-proxy-advanced/) requires an AI license.
 
 **Our three project plugins are available to Kong OSS users as Apache-2.0 source in this repository.** The supplied gateway image includes them and the OSS release's bundled plugins. Compatible OSS plugins can be configured alongside them; check version support and how they interact. Each upstream plugin retains its own license.
 
@@ -88,22 +88,26 @@ flowchart LR
 
 A new capability can follow the same approach: a focused plugin, clear configuration, and an example others can run. Contributors implement, package, and test new plugins using Kong's plugin mechanism. The [contribution guide](CONTRIBUTING.md#adding-a-plugin) explains the steps.
 
-### Build automatic LLM routing with us
+### Build capabilities that work across workflows
 
-Imagine a policy that sends simple summaries to a lower-cost model, chooses a model evaluated for a demanding task, and keeps sensitive requests on an approved local model. The choice could depend on cost, latency, capability, availability, and data-location rules.
+An agent calling another agent creates questions that every team needs to answer: Who called whom? Which step was slow? Why did the workflow fail? What access was used? Solving those questions in a shared gateway can make the solution reusable across many agents and tools.
 
-A contributor could turn that policy into an LLM-routing plugin. “Best” would be defined by the application's requirements and measured results. A useful first contribution could select between two approved model endpoints, explain each choice, and include a reproducible example.
+These are **cross-cutting concerns**: capabilities that support many workflows. Plugins give contributors a place to develop them independently and compose them with the protocol and access checks already here.
 
-**LLM routing is proposed, not implemented.** It would need model-call routes, provider integration, access controls, and tests. Existing MCP and A2A calls have their own configured destinations and permissions.
+| A shared need | A contribution could enable |
+| --- | --- |
+| Agent-to-agent observability | Link related calls, show the path between agents, and explain latency and failures. |
+| Access policy and audit | Apply additional access rules and record who called which service with what permission. |
+| Usage and cost controls | Enforce configured limits or budgets across agent and tool calls. |
+| Discovery and routing | Find approved agents and tools, or select an appropriate destination. |
+| Model selection | Route model requests using cost, latency, capability, or data-location policy. |
+| Administration and integration | Extend the control plane, support more SDK languages, and add identity integrations. |
 
-Other contribution directions include:
+For example, an observability contribution could demonstrate a trace across two agents and a tool call. An LLM-routing contribution could select between two approved models using a clear policy. Both start with a concrete problem and an example others can reproduce.
 
-- Agent and tool discovery, so callers can find approved services.
-- Observability that explains calls, latency, and failures.
-- Control-plane support for A2A and token exchange.
-- More SDK languages, identity integrations, and domain examples.
+**These are contribution directions, not additional features shipped today.** Each needs its own design, configuration, implementation, and tests. The gateway can observe traffic that passes through it; complete workflow traces also need cooperating agents and services.
 
-These are invitations to build, rather than a committed release schedule. [Open a proposal](https://github.com/sanketrk/FOSS-AGENTIC-GATEWAY/issues/new) with the problem and a concrete workflow. Documentation fixes, bug reports, and interoperability tests are equally useful contributions.
+[Open a proposal](https://github.com/sanketrk/FOSS-AGENTIC-GATEWAY/issues/new) with the problem and a concrete workflow. Documentation fixes, bug reports, and interoperability tests are equally useful contributions. The [contribution guide](CONTRIBUTING.md) explains how to start.
 
 ## Give each target only the access it needs
 

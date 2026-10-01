@@ -6,7 +6,9 @@ Help make agent connections a reusable part of the open-source ecosystem. Contri
 
 For a new capability, [open an issue](https://github.com/sanketrk/FOSS-AGENTIC-GATEWAY/issues/new) describing who needs it, a concrete workflow, and the behavior you propose. Include what already exists, what you would add, and how you would demonstrate it. Small fixes and documentation improvements can go straight to a pull request.
 
-For automatic LLM routing, describe what “best model” means: allowed providers, cost or latency targets, capability requirements, data-location rules, and the measurements used to choose. This is a proposed extension; no model router or general LLM API currently ships in this repository. A first implementation could select between two approved model endpoints with a clear policy and reproducible examples.
+Shared concerns are good starting points: agent-to-agent observability, access policy, audit, usage controls, discovery, routing, or application integration. Describe which layer your change affects and how it works alongside existing plugins.
+
+For example, an observability proposal could link calls across two agents and an MCP server, identify slow or failed steps, and explain what instrumentation the agents must provide. Keep credentials and sensitive payloads out of traces. A model-routing proposal could define selection criteria and demonstrate a policy between two approved model endpoints. These examples are contribution directions; tracing and model routing are not implemented project features.
 
 ## Find your starting point
 
@@ -29,7 +31,7 @@ The three project plugins are Apache-2.0 source. They use Kong's plugin mechanis
 3. Choose its execution priority deliberately and test it with the other plugins used on that route. If it obtains backend credentials, preserve authentication before exchange and correct audience binding. The [shared authentication contract](docs/plugins/token-exchange.md#shared-authentication-contract) explains the current integration.
 4. Add a runnable configuration or example, appropriate tests, and documentation describing supported behavior and limits.
 
-A router that changes the destination must keep destination selection, audience, scopes, and credentials consistent. Model routes need their own access policy and provider credential handling. Reusing the gateway does not automatically give a new route the MCP or A2A authentication policy.
+A router that changes the destination must keep destination selection, audience, scopes, and credentials consistent. New route types need explicit access policy and credential handling. An observability plugin needs a clear propagation and collection design; tracing a complete workflow also requires cooperating agents and services.
 
 Keep protocol handling and business logic separate. Prefer open standards and configurable providers. Preserve TLS verification, secret isolation, and backend authorization. Document any provider-specific integration explicitly.
 
