@@ -20,7 +20,7 @@ container = pod["containers"].first
 security = container["securityContext"]
 assert(security["readOnlyRootFilesystem"] && security["allowPrivilegeEscalation"] == false, "control plane must be hardened")
 assert(security.dig("capabilities", "drop") == ["ALL"], "control plane must drop capabilities")
-assert(container["env"].find { |e| e["name"] == "AUTH0_CLIENT_SECRET" }.dig("valueFrom", "secretKeyRef", "name") == "mcp-control-plane-auth0", "OIDC client secret must come from a Secret")
+assert(container["env"].find { |e| e["name"] == "OIDC_CLIENT_SECRET" }.dig("valueFrom", "secretKeyRef", "name") == "mcp-control-plane-oidc", "OIDC client secret must come from a Secret")
 assert(pod["volumes"].first.dig("persistentVolumeClaim", "claimName") == "mcp-control-plane-data", "registry must persist")
 puts "Optional control plane deployment checks passed."
 assert(container["env"].find { |e| e["name"] == "AUTH_MODE" }["value"] == "oidc", "deployment must default to OIDC")

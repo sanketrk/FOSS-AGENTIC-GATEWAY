@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from oidc import Auth0OIDC, AuthError
+from oidc import OIDCClient, AuthError
 
 ROOT = Path(__file__).parent
 MAX_BODY = 65536
@@ -86,7 +86,7 @@ def generate(servers, public_url):
                     "resource_metadata_url": public_url + metadata,
                     "metadata_paths": [metadata],
                     "authorization_servers": [{"issuer": server["issuer"], "discovery_url": server["discovery_url"]}],
-                    "audience": server["audience"], "required_scopes": server["required_scopes"],
+                    "audience": public_url + endpoint, "required_scopes": server["required_scopes"],
                     "scopes_supported": server["required_scopes"],
                     "allowed_origins": server["allowed_origins"], "forward_bearer_token": False,
                     "ssl_verify": True, "signing_algorithms": ["RS256"],
@@ -118,6 +118,9 @@ class Registry:
 
     def save(self, data, create=False, actor=None):
         server = validate(data)
+        expected_audience = self.public_url + "/mcp/" + server["id"]
+        if server["audience"] != expected_audience:
+            raise ValueError("Token audience must match the server's public MCP resource URI")
         with self.lock, self.db:
             exists = self.db.execute("SELECT 1 FROM servers WHERE id=?", (server["id"],)).fetchone()
             if create and exists:
@@ -241,7 +244,7 @@ def handler(registry, token=None, oidc=None):
             if self.command == "GET" and path == "/healthz":
                 return self.send(200, {"status": "ok"})
             if self.command == "GET" and path == "/auth/config":
-                return self.send(200, {"mode": "oidc" if oidc else "token", "provider": "Auth0" if oidc else None})
+                return self.send(200, {"mode": "oidc" if oidc else "token", "provider": "OIDC" if oidc else None})
             if oidc and path == "/auth/login" and self.command == "GET":
                 location, cookie = oidc.login()
                 return self.send(302, {}, headers={"Location": location}, cookies=[cookie])
@@ -327,11 +330,20 @@ def main():
     mode = os.environ.get("AUTH_MODE", "oidc")
     token, oidc = None, None
     if mode == "oidc":
-        oidc = Auth0OIDC(os.environ.get("AUTH0_DOMAIN", ""), os.environ.get("AUTH0_CLIENT_ID", ""),
-                        os.environ.get("AUTH0_CLIENT_SECRET", ""), os.environ.get("AUTH0_AUDIENCE", ""),
-                        os.environ.get("CONTROL_PLANE_PUBLIC_URL", ""),
-                        os.environ.get("AUTH0_ADMIN_PERMISSION", "control-plane:admin"),
-                        os.environ.get("SESSION_SECONDS", "900"))
+        oidc = OIDCClient(
+            os.environ.get("OIDC_ISSUER", ""), os.environ.get("OIDC_CLIENT_ID", ""),
+            os.environ.get("OIDC_CLIENT_SECRET", ""), os.environ.get("OIDC_API_AUDIENCE") or None,
+            os.environ.get("CONTROL_PLANE_PUBLIC_URL", ""),
+            admin_claim=os.environ.get("OIDC_ADMIN_CLAIM", "/roles"),
+            admin_value=os.environ.get("OIDC_ADMIN_VALUE", "mcp-admin"),
+            admin_claim_source=os.environ.get("OIDC_ADMIN_CLAIM_SOURCE", "id_token"),
+            scopes=os.environ.get("OIDC_SCOPES", "openid profile email").split(),
+            token_auth_method=os.environ.get("OIDC_TOKEN_AUTH_METHOD", "client_secret_basic"),
+            authorization_params=json.loads(os.environ.get("OIDC_AUTHORIZATION_PARAMS", "{}")),
+            discovery_url=os.environ.get("OIDC_DISCOVERY_URL") or None,
+            resource=os.environ.get("OIDC_RESOURCE") or None,
+            signing_algorithms=os.environ.get("OIDC_SIGNING_ALGORITHMS", "RS256").split(","),
+            session_seconds=os.environ.get("SESSION_SECONDS", "900"))
     elif mode == "token":
         token = os.environ.get("CONTROL_PLANE_TOKEN", "")
         if len(token) < 32 or not token.isascii() or any(c.isspace() for c in token):

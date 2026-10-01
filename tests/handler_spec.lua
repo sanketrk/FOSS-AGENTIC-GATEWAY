@@ -3,7 +3,7 @@ package.path = "/usr/local/openresty/lualib/?.lua;/usr/local/openresty/lualib/?/
 package.cpath = "/usr/local/openresty/lualib/?.so;" .. package.cpath
 
 local cjson = require "cjson.safe"
-local current_claims = { iss = "https://issuer.example.com/", aud = "mcp-gateway", scope = "mcp:access" }
+local current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
 local test_token_issuer = "issuer11"
 local token_verifications = 0
 local verified_discovery
@@ -86,7 +86,7 @@ local config = {
       discovery_url = "https://issuer.example.com/.well-known/openid-configuration",
     },
   },
-  audience = "mcp-gateway",
+  audience = "https://mcp.example.com/mcp",
   scopes_supported = { "mcp:access" },
   signing_algorithms = { "RS256" },
   ssl_verify = true,
@@ -227,7 +227,7 @@ test("a token from each advertised issuer uses only its configured discovery URL
     issuer = "https://second-idp.example.com/",
     discovery_url = "https://second-idp.example.com/.well-known/openid-configuration",
   }
-  current_claims = { iss = "https://second-idp.example.com/", aud = "mcp-gateway", scope = "mcp:access" }
+  current_claims = { iss = "https://second-idp.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
   test_token_issuer = "issuer22"
   request({ headers = { authorization = "Bearer a.issuer-two.c" } })
   assert(not state.response, "token from second configured IdP should be accepted")
@@ -235,7 +235,7 @@ test("a token from each advertised issuer uses only its configured discovery URL
     "issuer must select its matching configured discovery URL")
   config.authorization_servers[2] = nil
   test_token_issuer = "issuer11"
-  current_claims = { iss = "https://issuer.example.com/", aud = "mcp-gateway", scope = "mcp:access" }
+  current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
 end)
 
 test("unknown JWT issuers are rejected without contacting an unconfigured issuer", function()
@@ -260,6 +260,15 @@ test("notification POSTs do not require version metadata", function()
   })
   assert(state.response and state.response.status == 401,
     "notification must pass transport validation and reach authentication")
+end)
+
+test("current extension notifications do not require request-only method headers", function()
+  request({
+    body = make_message("notifications/vendor-event", {}, false),
+    headers = { ["mcp-method"] = false, authorization = false },
+  })
+  assert(state.response and state.response.status == 401,
+    "notification should pass transport checks and reach authentication")
 end)
 
 test("legacy GET and DELETE transports reach authentication", function()
@@ -519,35 +528,35 @@ end)
 test("scope and audience restrictions still apply", function()
   current_claims = { iss = "https://issuer.example.com/", aud = "wrong", scope = "mcp:access" }
   expect_status("wrong audience", 401)
-  current_claims = { iss = "https://issuer.example.com/", aud = "mcp-gateway", scope = "other" }
+  current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "other" }
   expect_status("missing scope", 403)
   assert(state.response.headers["WWW-Authenticate"]:find('error="insufficient_scope"', 1, true),
     "scope failure challenge must identify insufficient scope")
   assert(state.response.headers["WWW-Authenticate"]:find('scope="mcp:access"', 1, true),
     "scope failure challenge must advertise the required scope")
-  current_claims = { iss = "https://issuer.example.com/", aud = "mcp-gateway", scope = "mcp:access" }
+  current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
 end)
 
 test("per-server audiences and scopes reject tokens for another server", function()
   local original = config
   config = {}
   for key, value in pairs(original) do config[key] = value end
-  config.audience = "mcp-server-b"
+  config.audience = "https://mcp.example.com/mcp/server-b"
   config.required_scopes = { "mcp:server-b:access" }
   config.resource_url = "https://mcp.example.com/mcp/server-b"
   config.resource_metadata_url = "https://mcp.example.com/.well-known/oauth-protected-resource/mcp/server-b"
   config.metadata_paths = { "/.well-known/oauth-protected-resource/mcp/server-b" }
 
-  current_claims = { iss = "https://issuer.example.com/", aud = "mcp-server-a", scope = "mcp:server-a:access" }
+  current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp/server-a", scope = "mcp:server-a:access" }
   expect_status("server A token at server B", 401)
   assert(state.response.headers["WWW-Authenticate"]:find(config.resource_metadata_url, 1, true))
-  current_claims = { iss = "https://issuer.example.com/", aud = "mcp-server-b", scope = "mcp:server-a:access" }
+  current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp/server-b", scope = "mcp:server-a:access" }
   expect_status("server B audience without server B scope", 403)
-  current_claims = { iss = "https://issuer.example.com/", aud = "mcp-server-b", scope = "mcp:server-b:access" }
+  current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp/server-b", scope = "mcp:server-b:access" }
   request()
   assert(not state.response, "matching server policy should permit proxying")
   config = original
-  current_claims = { iss = "https://issuer.example.com/", aud = "mcp-gateway", scope = "mcp:access" }
+  current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
 end)
 
 io.write("1..", passed, "\n")

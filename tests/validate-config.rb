@@ -29,6 +29,7 @@ services.each do |service|
     resource = URI.parse(config.fetch("resource_url"))
     metadata = URI.parse(config.fetch("resource_metadata_url"))
     assert(resource.scheme == "https" && metadata.scheme == "https", "public resource URLs must use HTTPS")
+    assert(config.fetch("audience") == resource.to_s, "MCP audience must match its public resource URI")
     assert(!seen_resources[resource.to_s], "resource must be unique per service")
     assert(!seen_audiences[config.fetch("audience")], "sample audiences must isolate services")
     seen_resources[resource.to_s] = true

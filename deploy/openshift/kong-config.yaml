@@ -41,7 +41,7 @@ data:
                   legacy_protocol_versions:
                     - "2025-11-25"
                     - "2025-03-26"
-                  audience: mcp-gateway
+                  audience: https://mcp.example.com/mcp
                   scopes_supported:
                     - mcp:access
                   forward_bearer_token: false
@@ -81,7 +81,7 @@ data:
                   legacy_protocol_versions:
                     - "2025-11-25"
                     - "2025-03-26"
-                  audience: mcp-server-a
+                  audience: https://mcp.example.com/mcp/server-a
                   scopes_supported:
                     - mcp:server-a:access
                   forward_bearer_token: false
@@ -121,7 +121,7 @@ data:
                   legacy_protocol_versions:
                     - "2025-11-25"
                     - "2025-03-26"
-                  audience: mcp-server-b
+                  audience: https://mcp.example.com/mcp/server-b
                   scopes_supported:
                     - mcp:server-b:access
                   forward_bearer_token: false

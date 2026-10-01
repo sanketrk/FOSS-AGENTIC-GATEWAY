@@ -14,7 +14,7 @@ TOKEN = "test-admin-token-" + "x" * 32
 def sample(server_id="server-a"):
     return {"id": server_id, "name": "Test server", "upstream_url": "http://internal:3000/mcp",
             "issuer": "https://issuer.example.com/", "discovery_url": "https://issuer.example.com/.well-known/openid-configuration",
-            "audience": "mcp-" + server_id, "required_scopes": ["mcp:" + server_id + ":access"]}
+            "audience": "https://gateway.example.com/mcp/" + server_id, "required_scopes": ["mcp:" + server_id + ":access"]}
 
 
 class RegistryTests(unittest.TestCase):
@@ -30,11 +30,17 @@ class RegistryTests(unittest.TestCase):
     def test_persistence_and_duplicate_policy(self):
         self.registry.save(sample(), create=True)
         with self.assertRaises(FileExistsError): self.registry.save(sample(), create=True)
-        other = sample("server-b"); other["audience"] = "mcp-server-a"
+        other = sample("server-b"); other["audience"] = "https://gateway.example.com/mcp/server-a"
         with self.assertRaises(ValueError): self.registry.save(other, create=True)
         again = Registry(self.path, "https://gateway.example.com")
         self.assertEqual(again.servers()[0]["id"], "server-a")
         again.db.close()
+
+    def test_audience_is_bound_to_registered_public_resource(self):
+        data = sample()
+        data['audience'] = 'https://unrelated.example.com/api'
+        with self.assertRaises(ValueError): self.registry.save(data, create=True)
+        self.assertEqual(self.registry.servers(), [])
 
     def test_generated_metadata_and_mapping(self):
         config = generate([validate(sample()), validate(sample("server-b"))], "https://gateway.example.com")
@@ -43,6 +49,7 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(route["paths"], ["~/mcp/server-a$", r"~/\.well-known/oauth-protected-resource/mcp/server-a$"])
         policy = route["plugins"][0]["config"]
         self.assertEqual(policy["resource_url"], "https://gateway.example.com/mcp/server-a")
+        self.assertEqual(policy["audience"], policy["resource_url"])
         self.assertTrue(policy["ssl_verify"])
         self.assertFalse(policy["forward_bearer_token"])
         self.assertEqual(config["services"][0]["url"], "http://internal:3000/mcp")

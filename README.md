@@ -4,6 +4,8 @@ An Apache-2.0-licensed HTTP gateway built on Kong Gateway OSS and OpenResty. It 
 
 This is a **transport-aware gateway, not a complete MCP server or protocol implementation**. The upstream MCP server must implement MCP methods, results, subscriptions, cancellation, session lifecycle, and any negotiated extensions. The gateway streams upstream SSE responses without buffering and passes through ordinary response headers/body. It validates the current request metadata and legacy JSON-RPC transport envelope, but does not validate all MCP method schemas or response semantics.
 
+The control-plane authentication and MCP OAuth interfaces use provider-neutral configuration. See the [interoperability profile](docs/INTEROPERABILITY.md) for supported standards, tested behavior, deployment requirements, and limitations. Auth0 is an optional configuration example, not a required provider.
+
 ## Features
 
 - Kong Gateway OSS 3.9 by default. Supports MCP Streamable HTTP revision `2026-07-28` and configurable legacy compatibility for `2025-11-25` and `2025-03-26`.
@@ -23,13 +25,13 @@ Agents connect to one public gateway host and select a registered server endpoin
 
 | Agent endpoint | Sample internal server | Token audience | Required scope |
 | --- | --- | --- | --- |
-| `/mcp` | `mcp-server:3000` (path preserved) | `mcp-gateway` | `mcp:access` |
-| `/mcp/server-a` | `mcp-server-a:3000/mcp` | `mcp-server-a` | `mcp:server-a:access` |
-| `/mcp/server-b` | `mcp-server-b:3000/mcp` | `mcp-server-b` | `mcp:server-b:access` |
+| `/mcp` | `mcp-server:3000` (path preserved) | `https://mcp.example.com/mcp` | `mcp:access` |
+| `/mcp/server-a` | `mcp-server-a:3000/mcp` | `https://mcp.example.com/mcp/server-a` | `mcp:server-a:access` |
+| `/mcp/server-b` | `mcp-server-b:3000/mcp` | `https://mcp.example.com/mcp/server-b` | `mcp:server-b:access` |
 
 These are generic placeholders. The `services` list in `kong/kong.yml` is the declarative server registry. Add a service and route for each actual MCP server, with its upstream URL and independent plugin configuration. Update the embedded configuration in `deploy/openshift/kong-config.yaml` to match; validation checks both copies. For file-managed deployments, registry changes require a controlled configuration rollout. The optional [control plane](control-plane/README.md) adds an authenticated registration API, browser UI, SQLite persistence, and explicit publish workflow.
 
-Configure agents with the public endpoint(s) they may access, never the backend URL. The identity provider must issue tokens with the endpoint's configured audience and scopes. A token for server A is rejected at server B unless it explicitly satisfies server B's policy. Policies govern access to a whole server; tool-level authorization remains the upstream's responsibility.
+Configure agents with the public endpoint(s) they may access, never the backend URL. The authorization server must issue access tokens bound to the endpoint's public resource URI and scopes. MCP clients send the standard RFC 8707 `resource` parameter in authorization and token requests. A token for server A is rejected at server B unless it explicitly satisfies server B's policy. Policies govern access to a whole server; tool-level authorization remains the upstream's responsibility.
 
 Each endpoint has its own `/.well-known/oauth-protected-resource/mcp/<server>` metadata URL. The root metadata endpoint describes only the default `/mcp` resource, not a catalog of all servers. The gateway does not aggregate tools or dynamically discover backends.
 
@@ -48,7 +50,7 @@ sh tests/smoke.sh
 
 ## Registration API and control plane UI
 
-The optional [lightweight control plane](control-plane/README.md) lets administrators register, edit, and remove MCP servers, review a generated gateway configuration, and publish it through an OpenShift rollout. Registration changes remain drafts until published. The control plane uses Auth0 OIDC login and an assigned administrator permission; agents still authenticate with their separate OAuth policies at the gateway. Kong's Admin API remains disabled.
+The optional [lightweight control plane](control-plane/README.md) lets administrators register, edit, and remove MCP servers, review a generated gateway configuration, and publish it through an OpenShift rollout. Registration changes remain drafts until published. The control plane uses OIDC login with a configurable trusted administrator claim; agents still authenticate with their separate OAuth policies at the gateway. Kong's Admin API remains disabled.
 
 Run it locally with Python or deploy the optional `deploy/control-plane` overlay. See its [setup, API, and publication documentation](control-plane/README.md) for instructions and rollout limitations.
 

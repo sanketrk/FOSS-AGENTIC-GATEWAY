@@ -1,5 +1,5 @@
 'use strict';
-let authMode = 'oidc', csrf = '', token = '', records = [], revision = '', config = null, editing = false;
+let gatewayPublicUrl = '', authMode = 'oidc', csrf = '', token = '', records = [], revision = '', config = null, editing = false;
 const $ = id => document.getElementById(id);
 const node = (tag, text, cls) => { const el = document.createElement(tag); el.textContent = text; if (cls) el.className = cls; return el; };
 async function api(path, method = 'GET', data) {
@@ -14,7 +14,7 @@ async function api(path, method = 'GET', data) {
 function message(text) { $('message').textContent = text; }
 async function refresh() {
   const [registry, status] = await Promise.all([api('servers'), api('status')]);
-  records = registry.servers;
+  records = registry.servers; gatewayPublicUrl = registry.public_url;
   $('gateway-url').textContent = registry.public_url;
   $('publish-state').textContent = status.published?.revision === status.draft_revision ? 'Published configuration matches this draft' : 'Draft configuration · unpublished changes';
   $('publish').disabled = !status.publish_enabled || !records.length;
@@ -41,6 +41,8 @@ function openEditor(server) {
   $('editor-title').textContent = editing ? 'Edit server policy' : 'Register server';
   const form = $('server-form');
   form.elements.id.disabled = editing;
+  form.elements.id.oninput = () => { form.elements.audience.value = gatewayPublicUrl + '/mcp/' + form.elements.id.value; };
+  if (!server) form.elements.id.oninput();
   if (server) for (const [key, value] of Object.entries(server)) {
     if (key === 'legacy_enabled') form.elements[key].checked = value;
     else form.elements[key].value = Array.isArray(value) ? value.join(key === 'allowed_origins' ? '\n' : ' ') : value;

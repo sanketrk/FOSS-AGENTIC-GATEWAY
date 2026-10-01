@@ -1,46 +1,88 @@
 # Lightweight control plane
 
-A separate administrator service provides a persistent MCP server registry, authenticated JSON API, and browser UI. Python and SQLite keep it small; PyJWT and cryptography verify OIDC token signatures. Agents continue connecting to Kong; they do not connect to this service.
+A separate administrator service provides a persistent MCP server registry, authenticated JSON API, and browser UI. Python and SQLite keep it small; PyJWT and cryptography verify signed tokens. Agents connect to the gateway, not this administrator service.
 
-## Auth0 OIDC login
+## OIDC login
 
-OIDC is the default authentication mode. Follow the [Auth0 setup guide](AUTH0.md) to create a Regular Web Application and a dedicated control-plane API with the `control-plane:admin` permission. An authenticated account without that assigned permission receives 403.
+OIDC is the default authentication mode. Configure a trusted issuer, register a client using authorization code flow, and register exact callback/logout URLs. The application discovers the authorization, token, JWKS, and optional logout endpoints from OIDC metadata. Issuers with paths and endpoints on different HTTPS hosts are supported. See [OIDC Discovery](https://openid.net/specs/openid-connect-discovery-1_0.html).
 
-The browser signs in through Auth0; authorization codes are exchanged on the backend using PKCE and the confidential client secret. ID and access tokens are verified with issuer, audience, RS256 signature, expiry, nonce, and subject checks. No OAuth tokens are returned to the browser. HTTPS sessions use HttpOnly, Secure, SameSite=Lax cookies; loopback HTTP is supported for development. Mutations require both the configured Origin and a session CSRF token.
+The login flow uses PKCE S256, state bound to an HttpOnly cookie, nonce, and exact issuer/client-audience checks. Signing algorithms are explicitly allowed; symmetric algorithms and unsigned tokens are rejected. Token endpoint authentication supports `client_secret_basic` (default), `client_secret_post`, and public clients with `none` plus PKCE. The callback validates a returned `iss` parameter, requiring it when the issuer advertises support. TLS certificate verification stays enabled.
 
-Sessions live only in this single control-plane process, expire after 15 minutes by default (bounded by token expiry), and are cleared on restart. Role revocation takes effect on reauthentication or session expiry, not immediately. Logout deletes the local session and redirects through Auth0 logout. There is no refresh-token storage or automatic token renewal. Audit events record the verified Auth0 subject.
+Administrator authorization is a deployment policy, **not a standard OIDC role claim**. Configure an exact claim/value that your issuer controls. By default `/roles` in the verified ID token must contain `mcp-admin`. RFC 6901 JSON pointers support nested claims such as `/realm_access/roles` or namespaced claims such as `/https:~1~1claims.example.com~1roles`. The claim must be a matching string or contain the configured value in an array. Requested scopes alone do not grant administrator access. Ensure users cannot assign themselves the authorization claim through editable profile data.
 
-API automation can use an Auth0 API access token with the same audience and `control-plane:admin` permission. OIDC mode never falls back to the old shared administrator token. For explicit local development only, `AUTH_MODE=token` retains the original token mode; install the requirements, set `CONTROL_PLANE_TOKEN` to a strong secret, and start the app. Browser tokens remain in page memory in that mode.
+The default ID-token policy does not require JWT access tokens or an API audience: opaque access tokens from the token endpoint are supported for interactive login. An alternative `access_token` claim policy verifies a signed JWT against `OIDC_API_AUDIENCE` and binds its subject to the ID token. Bearer API automation also requires this configured audience and a JWT carrying the administrator claim. Opaque API tokens/introspection, encrypted ID tokens, client assertions, and refresh-token flows are outside the implemented profile.
 
-Register a server with its complete backend URL (including its MCP endpoint path), public ID, trusted issuer and discovery URL, unique audience, and required scopes. HTTPS is required for public gateway/identity-provider URLs; HTTP backends are supported for internal networks. Browser origins are optional and denied unless listed. Token forwarding remains disabled; verification uses RS256 with TLS verification enabled.
+The browser receives only an opaque session cookie during login, not access or refresh tokens. The ID token is retained server-side as an OIDC logout hint, and is supplied to the discovered logout endpoint when signing out. It is never included in `/api/session`. Sessions live only in this single control-plane process, expire after 15 minutes by default (bounded by token expiry), and are cleared on restart. HTTPS uses HttpOnly, Secure, SameSite=Lax cookies; loopback HTTP is supported for development. Mutations require the configured Origin and CSRF token. Changes to upstream administrator claims take effect on reauthentication or session expiry, not immediately. Audit events record the verified subject.
 
-Registration is a draft change. **Review configuration** shows a complete snapshot. Download `kong.json` for a manual deployment, or publish with the optional Kubernetes integration. JSON is valid declarative YAML for Kong. The generated configuration contains only registered named servers; it replaces static sample routes, including `/mcp` and its root metadata. Each registered resource retains its own metadata endpoint. There is no open self-registration endpoint.
+Logout always clears the local session. When discovery advertises `end_session_endpoint`, the browser uses OIDC RP-Initiated Logout with `id_token_hint`, `client_id`, and `post_logout_redirect_uri`; a provider may ask the user to confirm logout. Without that endpoint, logout is local only. No proprietary logout URL is constructed. See [RP-Initiated Logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html).
+
+## Local setup
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python3 -m pip install -r control-plane/requirements.txt
+cp control-plane/.env.example control-plane/.env
+```
+
+Edit the ignored `.env` with your issuer/client settings and administrator claim policy. Register `http://127.0.0.1:8080/auth/callback` as the client callback and `http://127.0.0.1:8080/` as the post-logout redirect. Then:
+
+```sh
+set -a
+. control-plane/.env
+set +a
+python3 control-plane/app.py
+```
+
+Open http://127.0.0.1:8080 and sign in with your identity provider. Remote deployments must use an HTTPS public URL. The configured URL determines callback URLs and Secure cookie behavior; untrusted forwarded headers do not override it.
+
+| Setting | Purpose |
+| --- | --- |
+| `OIDC_ISSUER` | Exact HTTPS issuer, including any path/trailing slash |
+| `OIDC_DISCOVERY_URL` | Optional explicit metadata URL; defaults to issuer plus `/.well-known/openid-configuration` |
+| `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | Registered client credentials; secret stays server-side |
+| `OIDC_TOKEN_AUTH_METHOD` | `client_secret_basic`, `client_secret_post`, or `none` |
+| `OIDC_SCOPES` | Space-separated scopes; must include `openid` |
+| `OIDC_SIGNING_ALGORITHMS` | Comma-separated allowed asymmetric JWT algorithms; defaults to `RS256` |
+| `OIDC_ADMIN_CLAIM`, `OIDC_ADMIN_VALUE` | Trusted claim JSON pointer and required administrator value |
+| `OIDC_ADMIN_CLAIM_SOURCE` | `id_token` (default) or verified JWT `access_token` |
+| `OIDC_API_AUDIENCE` | Optional expected audience for JWT API tokens; required for access-token claim policy |
+| `OIDC_RESOURCE` | Optional standard RFC 8707 resource sent in both authorization and token requests |
+| `OIDC_AUTHORIZATION_PARAMS` | Optional JSON map of provider extension parameters; cannot override reserved OIDC fields |
+| `CONTROL_PLANE_PUBLIC_URL` | Public control-plane origin, distinct from MCP resources |
+| `GATEWAY_PUBLIC_URL` | Public gateway origin used for registered MCP resources |
+
+[Auth0](AUTH0.md) is an optional provider configuration example using this same generic client. It is not a built-in dependency. For explicit local development only, `AUTH_MODE=token` retains the shared-token mode with a strong `CONTROL_PLANE_TOKEN`; there is no automatic fallback in OIDC mode.
+
+## Server registration and publication
+
+Register the complete backend URL (including its MCP path), public server ID, trusted issuer/discovery URL, and required scopes. The token audience is the server's public MCP resource URI, for example `https://mcp.company.com/mcp/server-a`, consistent with resource-bound access tokens. The UI derives it from the gateway origin and server ID. Legacy opaque audience aliases from earlier revisions must be replaced in the authorization server's configuration and newly issued tokens. Generated configurations use resource-URI audiences.
+
+Registration is a draft change. Review the complete configuration before publication. Download `kong.json` for a manual deployment, or publish with the optional Kubernetes integration. Generated config contains only registered named servers and replaces static sample routes, including `/mcp` and root metadata. Each registered resource has its own protected-resource metadata endpoint. There is no open self-registration endpoint. Backend tool execution, custom parameter header validation, and legacy sessions remain upstream responsibilities.
 
 ## API
 
-All `/api/*` routes require an authenticated OIDC session or `Authorization: Bearer <Auth0 API access token>` with the administrator permission. Session mutations also require `X-CSRF-Token` returned by `/api/session`. Mutations require `Content-Type: application/json`. No CORS policy is enabled.
+All `/api/*` routes require a browser session or a signed JWT bearer access token with the configured API audience and administrator claim. Session mutations require `X-CSRF-Token` returned by `/api/session`; mutations use `application/json`. No CORS policy is enabled.
 
 | Method | Path | Operation |
 | --- | --- | --- |
-| GET | `/api/session` | Get authenticated identity and session CSRF token |
-| GET | `/api/servers` | List registered draft servers and gateway URL |
+| GET | `/api/session` | Authenticated identity and session CSRF token |
+| GET | `/api/servers` | List draft servers and gateway URL |
 | POST | `/api/servers` | Register a server; duplicate IDs return 409 |
-| PUT | `/api/servers/{id}` | Replace a server policy; ID cannot change |
+| PUT | `/api/servers/{id}` | Replace a policy; ID cannot change |
 | DELETE | `/api/servers/{id}` | Remove a draft server |
-| GET | `/api/preview` | Get complete Kong config and revision hash |
+| GET | `/api/preview` | Complete config and revision hash |
 | GET | `/api/status` | Publication request state and last 50 audit events |
 | POST | `/api/publish` | Publish `{ "revision": "<reviewed hash>" }`; stale revisions return 409 |
-
-Example registration body:
 
 ```json
 {
   "id": "server-a",
   "name": "My MCP server",
   "upstream_url": "http://server-a.internal:3000/mcp",
-  "issuer": "https://identity.company.com/",
-  "discovery_url": "https://identity.company.com/.well-known/openid-configuration",
-  "audience": "mcp-server-a",
+  "issuer": "https://identity.company.com/realms/enterprise",
+  "discovery_url": "https://identity.company.com/realms/enterprise/.well-known/openid-configuration",
+  "audience": "https://mcp.company.com/mcp/server-a",
   "required_scopes": ["mcp:server-a:access"],
   "allowed_origins": [],
   "legacy_enabled": true
@@ -49,31 +91,25 @@ Example registration body:
 
 ## Optional OpenShift deployment
 
-Build and push both gateway and control-plane images, then set the image references and `GATEWAY_PUBLIC_URL` / `CONTROL_PLANE_PUBLIC_URL` in the manifests. The base deployment stays unchanged; this overlay adds the control plane.
+Build/push the images and set their references, `GATEWAY_PUBLIC_URL`, `CONTROL_PLANE_PUBLIC_URL`, and the administrator policy in the manifests. Register the corresponding HTTPS callback and post-logout redirect at your issuer. Load credentials into a Secret:
 
 ```sh
 docker build -t mcp-control-plane:latest control-plane
-oc create secret generic mcp-control-plane-auth0 \
-  --from-literal=domain="$AUTH0_DOMAIN" \
-  --from-literal=client-id="$AUTH0_CLIENT_ID" \
-  --from-literal=client-secret="$AUTH0_CLIENT_SECRET"
+oc create secret generic mcp-control-plane-oidc \
+  --from-literal=issuer="$OIDC_ISSUER" \
+  --from-literal=client-id="$OIDC_CLIENT_ID" \
+  --from-literal=client-secret="$OIDC_CLIENT_SECRET"
 oc apply -k deploy/control-plane
-oc port-forward service/mcp-control-plane 8080:8080
 ```
 
-The control plane runs as one replica with a persistent SQLite volume and Recreate strategy. OpenShift supplies its runtime UID. Its dedicated service account can get/patch only the named gateway ConfigMap and Deployment in its namespace. Kong pods still do not mount service-account tokens and their Admin API remains disabled. The overlay creates no public Route; expose the UI through your administrator ingress if needed.
+The control plane runs as one replica with a persistent SQLite volume and Recreate strategy. OpenShift supplies its runtime UID. Its dedicated service account can get/patch only the named gateway ConfigMap and Deployment. Kong pods have no service-account token or Admin API listener. The overlay creates no public Route; expose the UI through your private administrator TLS ingress.
 
-Publishing patches `kong.yml` in the ConfigMap and the gateway Deployment's pod-template annotation to request a rolling restart. New pods load that persisted configuration. A successful API response means **rollout requested**, not rollout completed. Verify `oc rollout status deployment/mcp-gateway` and authenticated calls before considering the revision live. This rollout strategy deliberately keeps the Kong Admin API disabled; see [Kong DB-less configuration](https://developer.konghq.com/gateway/db-less-mode/).
-
-Replicas can temporarily use different policies during a rolling update; removal or revocation is not immediate across all pods. ConfigMap and Deployment writes are not atomic. If publication fails between them, the API reports failure and records an event; inspect cluster state and retry the same reviewed revision. Requests serialize within the single control-plane process. Do not deploy multiple writable control-plane instances against this SQLite database.
-
-Do not manage the same ConfigMap concurrently with GitOps or repeated static `oc apply` operations: those can overwrite published registrations. Treat the registry as the owner once enabled. Export and back up the configuration and persistent database. Roll back by restoring a known-good draft and publishing it; version history/automatic rollback are not yet implemented. Registry changes do not validate backend availability or perform live IdP discovery.
+Publication updates the ConfigMap and requests a rolling restart through a Deployment annotation. Success means **rollout requested**, not completed. Verify `oc rollout status deployment/mcp-gateway` and authenticated calls before treating a revision as live. Replicas may temporarily run different policies. The two writes are not atomic: after partial failure, inspect cluster state and retry the reviewed revision. Empty registries cannot be published. Do not deploy multiple SQLite writers or concurrently manage this ConfigMap with static manifests/GitOps. Back up the database and exported configuration. Automatic rollback and live backend/issuer availability checks are not implemented.
 
 ## Verification
 
 ```sh
-python3 -m pip install -r control-plane/requirements.txt
 python3 -m unittest discover -s control-plane -v
 ```
 
-CI also builds the control-plane container and runs its tests as an arbitrary UID with a read-only root filesystem, renders the optional deployment, and parses a generated registry configuration using Kong.
+CI verifies generic issuer discovery, token authentication methods, signed-token rejection, authorization claims, opaque browser access tokens, CSRF/session security, container hardening, generated Kong configuration, and routing. These checks cover the documented profile; they are not OpenID certification or a complete MCP server conformance suite. See [the interoperability profile](../docs/INTEROPERABILITY.md).

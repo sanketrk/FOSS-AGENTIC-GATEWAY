@@ -2,7 +2,7 @@
 set -eu
 
 : "${GATEWAY_URL:?Set GATEWAY_URL, for example https://mcp.example.com}"
-: "${ACCESS_TOKEN:?Set ACCESS_TOKEN to a valid OIDC JWT access token}"
+: "${ACCESS_TOKEN:?Set ACCESS_TOKEN to a valid OAuth JWT access token}"
 
 mcp_path="${MCP_PATH:-/mcp}"
 endpoint="${GATEWAY_URL%/}$mcp_path"
@@ -57,8 +57,10 @@ if ! grep -Fq "\"resource\":\"$resource_url\"" "$tmpdir/body" \
   exit 1
 fi
 
-assert_status 'root protected-resource metadata is public' 200 \
-  --request GET "${GATEWAY_URL%/}/.well-known/oauth-protected-resource"
+if [ "$mcp_path" = /mcp ]; then
+  assert_status 'root protected-resource metadata is public' 200 \
+    --request GET "${GATEWAY_URL%/}/.well-known/oauth-protected-resource"
+fi
 
 assert_status 'protocol header/body mismatch is rejected' 400 \
   --request POST "$endpoint" \

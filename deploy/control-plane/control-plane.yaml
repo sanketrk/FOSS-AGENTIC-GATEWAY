@@ -69,25 +69,29 @@ spec:
           env:
             - name: AUTH_MODE
               value: oidc
-            - name: AUTH0_DOMAIN
+            - name: OIDC_ISSUER
               valueFrom:
                 secretKeyRef:
-                  name: mcp-control-plane-auth0
-                  key: domain
-            - name: AUTH0_CLIENT_ID
+                  name: mcp-control-plane-oidc
+                  key: issuer
+            - name: OIDC_CLIENT_ID
               valueFrom:
                 secretKeyRef:
-                  name: mcp-control-plane-auth0
+                  name: mcp-control-plane-oidc
                   key: client-id
-            - name: AUTH0_CLIENT_SECRET
+            - name: OIDC_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: mcp-control-plane-auth0
+                  name: mcp-control-plane-oidc
                   key: client-secret
-            - name: AUTH0_AUDIENCE
-              value: https://mcp-control-plane
-            - name: AUTH0_ADMIN_PERMISSION
-              value: control-plane:admin
+            - name: OIDC_ADMIN_CLAIM
+              value: /roles
+            - name: OIDC_ADMIN_VALUE
+              value: mcp-admin
+            - name: OIDC_ADMIN_CLAIM_SOURCE
+              value: id_token
+            - name: OIDC_TOKEN_AUTH_METHOD
+              value: client_secret_basic
             - name: CONTROL_PLANE_PUBLIC_URL
               value: https://control.mcp.example.com
             - name: GATEWAY_PUBLIC_URL

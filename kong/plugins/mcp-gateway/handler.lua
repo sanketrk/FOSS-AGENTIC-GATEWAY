@@ -310,7 +310,8 @@ local function validate_transport_request(conf)
       return respond(400, "message is not valid for the current protocol version")
     end
     local method_header = kong.request.get_header("mcp-method")
-    if not header_value_matches(method_header, message.method, false) then
+    if (request_id ~= nil or method_header ~= nil)
+      and not header_value_matches(method_header, message.method, false) then
       return header_mismatch("Mcp-Method header does not match the JSON-RPC method", request_id)
     end
 
