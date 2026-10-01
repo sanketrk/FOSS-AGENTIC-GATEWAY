@@ -1,19 +1,16 @@
 # Lightweight control plane
 
-A separate administrator service provides a persistent MCP server registry, authenticated JSON API, and browser UI. Python's standard library and SQLite keep it dependency-free. Agents continue connecting to Kong; they do not connect to this service.
+A separate administrator service provides a persistent MCP server registry, authenticated JSON API, and browser UI. Python and SQLite keep it small; PyJWT and cryptography verify OIDC token signatures. Agents continue connecting to Kong; they do not connect to this service.
 
-## Run locally
+## Auth0 OIDC login
 
-From the repository root:
+OIDC is the default authentication mode. Follow the [Auth0 setup guide](AUTH0.md) to create a Regular Web Application and a dedicated control-plane API with the `control-plane:admin` permission. An authenticated account without that assigned permission receives 403.
 
-```sh
-export CONTROL_PLANE_TOKEN="$(openssl rand -hex 32)"
-export GATEWAY_PUBLIC_URL=https://mcp.company.com
-export REGISTRY_DATABASE=/tmp/mcp-registry.sqlite3
-python3 control-plane/app.py
-```
+The browser signs in through Auth0; authorization codes are exchanged on the backend using PKCE and the confidential client secret. ID and access tokens are verified with issuer, audience, RS256 signature, expiry, nonce, and subject checks. No OAuth tokens are returned to the browser. HTTPS sessions use HttpOnly, Secure, SameSite=Lax cookies; loopback HTTP is supported for development. Mutations require both the configured Origin and a session CSRF token.
 
-Open http://127.0.0.1:8080 and enter the token from your shell. The browser keeps it only in page memory, not local storage or a cookie. The service defaults to loopback. Keep the token private; everyone holding it has full administrator access. Use a TLS ingress and private administrator network for remote access. This initial version uses one shared admin token, not enterprise SSO or per-user roles. Audit events therefore identify actions, not individual administrators. Rotate the token by changing the environment/Secret and restarting the control plane.
+Sessions live only in this single control-plane process, expire after 15 minutes by default (bounded by token expiry), and are cleared on restart. Role revocation takes effect on reauthentication or session expiry, not immediately. Logout deletes the local session and redirects through Auth0 logout. There is no refresh-token storage or automatic token renewal. Audit events record the verified Auth0 subject.
+
+API automation can use an Auth0 API access token with the same audience and `control-plane:admin` permission. OIDC mode never falls back to the old shared administrator token. For explicit local development only, `AUTH_MODE=token` retains the original token mode; install the requirements, set `CONTROL_PLANE_TOKEN` to a strong secret, and start the app. Browser tokens remain in page memory in that mode.
 
 Register a server with its complete backend URL (including its MCP endpoint path), public ID, trusted issuer and discovery URL, unique audience, and required scopes. HTTPS is required for public gateway/identity-provider URLs; HTTP backends are supported for internal networks. Browser origins are optional and denied unless listed. Token forwarding remains disabled; verification uses RS256 with TLS verification enabled.
 
@@ -21,10 +18,11 @@ Registration is a draft change. **Review configuration** shows a complete snapsh
 
 ## API
 
-All `/api/*` routes require `Authorization: Bearer <administrator-token>`. Mutations require `Content-Type: application/json`. No CORS policy is enabled.
+All `/api/*` routes require an authenticated OIDC session or `Authorization: Bearer <Auth0 API access token>` with the administrator permission. Session mutations also require `X-CSRF-Token` returned by `/api/session`. Mutations require `Content-Type: application/json`. No CORS policy is enabled.
 
 | Method | Path | Operation |
 | --- | --- | --- |
+| GET | `/api/session` | Get authenticated identity and session CSRF token |
 | GET | `/api/servers` | List registered draft servers and gateway URL |
 | POST | `/api/servers` | Register a server; duplicate IDs return 409 |
 | PUT | `/api/servers/{id}` | Replace a server policy; ID cannot change |
@@ -51,11 +49,14 @@ Example registration body:
 
 ## Optional OpenShift deployment
 
-Build and push both gateway and control-plane images, then set the image references and `GATEWAY_PUBLIC_URL` in the manifests. The base deployment stays unchanged; this overlay adds the control plane.
+Build and push both gateway and control-plane images, then set the image references and `GATEWAY_PUBLIC_URL` / `CONTROL_PLANE_PUBLIC_URL` in the manifests. The base deployment stays unchanged; this overlay adds the control plane.
 
 ```sh
 docker build -t mcp-control-plane:latest control-plane
-oc create secret generic mcp-control-plane-auth --from-literal=token="$CONTROL_PLANE_TOKEN"
+oc create secret generic mcp-control-plane-auth0 \
+  --from-literal=domain="$AUTH0_DOMAIN" \
+  --from-literal=client-id="$AUTH0_CLIENT_ID" \
+  --from-literal=client-secret="$AUTH0_CLIENT_SECRET"
 oc apply -k deploy/control-plane
 oc port-forward service/mcp-control-plane 8080:8080
 ```
@@ -71,6 +72,7 @@ Do not manage the same ConfigMap concurrently with GitOps or repeated static `oc
 ## Verification
 
 ```sh
+python3 -m pip install -r control-plane/requirements.txt
 python3 -m unittest discover -s control-plane -v
 ```
 

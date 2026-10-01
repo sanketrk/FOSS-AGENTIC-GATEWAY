@@ -1,9 +1,12 @@
 'use strict';
-let token = '', records = [], revision = '', config = null, editing = false;
+let authMode = 'oidc', csrf = '', token = '', records = [], revision = '', config = null, editing = false;
 const $ = id => document.getElementById(id);
 const node = (tag, text, cls) => { const el = document.createElement(tag); el.textContent = text; if (cls) el.className = cls; return el; };
 async function api(path, method = 'GET', data) {
-  const response = await fetch('/api/' + path, {method, headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}, body: data === undefined ? undefined : JSON.stringify(data)});
+  const headers = {'Content-Type': 'application/json'};
+  if (authMode === 'token') headers.Authorization = 'Bearer ' + token;
+  if (csrf && method !== 'GET') headers['X-CSRF-Token'] = csrf;
+  const response = await fetch('/api/' + path, {method, credentials: 'same-origin', headers, body: data === undefined ? undefined : JSON.stringify(data)});
   const value = await response.json();
   if (!response.ok) throw new Error(value.error || 'Request failed');
   return value;
@@ -30,7 +33,7 @@ async function refresh() {
     actions.append(edit, remove); card.append(actions); $('servers').append(card);
   }
   $('events').replaceChildren();
-  for (const event of status.events) $('events').append(node('p', new Date(event.timestamp * 1000).toLocaleString() + ' · ' + event.action + ' · ' + (event.details.server || event.details.revision?.slice(0, 12) || ''), 'small muted'));
+  for (const event of status.events) $('events').append(node('p', new Date(event.timestamp * 1000).toLocaleString() + ' · ' + event.action + ' · ' + (event.details.server || event.details.revision?.slice(0, 12) || '') + (event.details.actor ? ' · ' + event.details.actor : ''), 'small muted'));
   if (!status.events.length) $('events').append(node('p', 'No registry changes yet.', 'muted small'));
 }
 function openEditor(server) {
@@ -46,10 +49,30 @@ function openEditor(server) {
 }
 $('login-form').onsubmit = async event => {
   event.preventDefault(); token = $('token').value;
-  try { await refresh(); $('token').value = ''; $('login').hidden = true; $('workspace').hidden = false; $('logout').hidden = false; message(''); }
+  try { const identity = await api('session'); await refresh(); $('token').value = ''; showWorkspace(identity); message(''); }
   catch (err) { token = ''; message(err.message); }
 };
-$('logout').onclick = () => { token = ''; records = []; config = null; revision = ''; $('servers').replaceChildren(); $('events').replaceChildren(); $('config').textContent = ''; $('server-form').reset(); $('workspace').hidden = true; $('login').hidden = false; $('logout').hidden = true; message('Signed out.'); };
+function showWorkspace(identity) {
+  csrf = identity.csrf || '';
+  $('identity').textContent = identity.name;
+  $('login').hidden = true; $('workspace').hidden = false; $('logout').hidden = false;
+}
+function clearSession() {
+  token = ''; csrf = ''; records = []; config = null; revision = '';
+  $('identity').textContent = ''; $('servers').replaceChildren(); $('events').replaceChildren();
+  $('config').textContent = ''; $('server-form').reset(); $('workspace').hidden = true;
+  $('login').hidden = false; $('logout').hidden = true;
+}
+$('logout').onclick = async () => {
+  if (authMode === 'oidc') {
+    try {
+      const response = await fetch('/auth/logout', {method: 'POST', credentials: 'same-origin', headers: {'X-CSRF-Token': csrf}});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      clearSession(); window.location.assign(result.logout_url);
+    } catch (err) { message(err.message); }
+  } else { clearSession(); message('Signed out.'); }
+};
 $('new-server').onclick = () => openEditor();
 $('close-editor').onclick = () => $('editor').close();
 $('close-preview').onclick = () => $('preview').close();
@@ -74,3 +97,21 @@ $('publish').onclick = async () => {
   catch (err) { $('publish-error').textContent = err.message; }
   finally { if (records.length) $('publish').disabled = false; }
 };
+
+async function bootstrap() {
+  try {
+    const response = await fetch('/auth/config');
+    if (!response.ok) throw new Error('Unable to load login configuration');
+    const settings = await response.json(); authMode = settings.mode;
+    $('oidc-login').hidden = authMode !== 'oidc'; $('oidc-note').hidden = authMode !== 'oidc';
+    $('login-form').hidden = authMode !== 'token'; $('token-note').hidden = authMode !== 'token';
+    if (authMode === 'oidc') {
+      const sessionResponse = await fetch('/api/session', {credentials: 'same-origin'});
+      if (sessionResponse.status === 401) return;
+      const identity = await sessionResponse.json();
+      if (!sessionResponse.ok) throw new Error(identity.error);
+      showWorkspace(identity); await refresh();
+    }
+  } catch (err) { message(err.message); }
+}
+bootstrap();

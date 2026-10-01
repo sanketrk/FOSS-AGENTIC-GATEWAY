@@ -13,6 +13,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from oidc import Auth0OIDC, AuthError
 
 ROOT = Path(__file__).parent
 MAX_BODY = 65536
@@ -115,7 +116,7 @@ class Registry:
         with self.lock:
             return [json.loads(row[0]) for row in self.db.execute("SELECT document FROM servers ORDER BY id")]
 
-    def save(self, data, create=False):
+    def save(self, data, create=False, actor=None):
         server = validate(data)
         with self.lock, self.db:
             exists = self.db.execute("SELECT 1 FROM servers WHERE id=?", (server["id"],)).fetchone()
@@ -127,14 +128,14 @@ class Registry:
                 if other["id"] != server["id"] and other["audience"] == server["audience"]:
                     raise ValueError("Each server must use a distinct audience")
             self.db.execute("INSERT OR REPLACE INTO servers VALUES(?,?)", (server["id"], json.dumps(server)))
-            self.audit("create" if create else "update", {"server": server["id"]})
+            self.audit("create" if create else "update", {"server": server["id"], "actor": actor})
         return server
 
-    def delete(self, server_id):
+    def delete(self, server_id, actor=None):
         with self.lock, self.db:
             if self.db.execute("DELETE FROM servers WHERE id=?", (server_id,)).rowcount != 1:
                 raise KeyError("Server not found")
-            self.audit("delete", {"server": server_id})
+            self.audit("delete", {"server": server_id, "actor": actor})
 
     def preview(self):
         with self.lock:
@@ -151,7 +152,7 @@ class Registry:
                     "draft_revision": self.preview()["revision"],
                     "events": [{"timestamp": t, "action": a, "details": json.loads(d)} for t, a, d in events]}
 
-    def publish(self, revision):
+    def publish(self, revision, actor=None):
         with self.lock:
             snapshot = self.preview()
             if revision != snapshot["revision"]:
@@ -164,12 +165,12 @@ class Registry:
                 result = self.publisher(snapshot)
             except Exception:
                 with self.db:
-                    self.audit("publish_failed", {"revision": revision})
+                    self.audit("publish_failed", {"revision": revision, "actor": actor})
                 raise
             published = {"revision": revision, "timestamp": time.time(), **result}
             with self.db:
                 self.db.execute("INSERT OR REPLACE INTO state VALUES('published',?)", (json.dumps(published),))
-                self.audit("publish_requested", published)
+                self.audit("publish_requested", {**published, "actor": actor})
             return published
 
 
@@ -204,13 +205,15 @@ class KubernetesPublisher:
         return {"state": "rollout_requested", "deployment": self.deployment}
 
 
-def handler(registry, token):
+def handler(registry, token=None, oidc=None):
+    if oidc is None and not token:
+        raise ValueError("An authentication provider is required")
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
             # Avoid logging request bodies, headers, credentials, or URL query strings.
             pass
 
-        def send(self, code, data, content_type="application/json"):
+        def send(self, code, data, content_type="application/json", headers=None, cookies=()):
             payload = json.dumps(data).encode() if content_type == "application/json" else data
             self.send_response(code)
             self.send_header("Content-Type", content_type)
@@ -219,13 +222,37 @@ def handler(registry, token):
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("X-Frame-Options", "DENY")
             self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+            self.send_header("Referrer-Policy", "no-referrer")
+            for key, value in (headers or {}).items(): self.send_header(key, value)
+            for cookie in cookies: self.send_header("Set-Cookie", cookie)
             self.end_headers()
             self.wfile.write(payload)
 
         def dispatch(self):
+            try:
+                return self._dispatch()
+            except AuthError as error:
+                return self.send(error.status, {"error": str(error)})
+            except Exception:
+                return self.send(502, {"error": "Identity provider unavailable or login failed. Please retry."})
+
+        def _dispatch(self):
             path = urllib.parse.urlsplit(self.path).path
             if self.command == "GET" and path == "/healthz":
                 return self.send(200, {"status": "ok"})
+            if self.command == "GET" and path == "/auth/config":
+                return self.send(200, {"mode": "oidc" if oidc else "token", "provider": "Auth0" if oidc else None})
+            if oidc and path == "/auth/login" and self.command == "GET":
+                location, cookie = oidc.login()
+                return self.send(302, {}, headers={"Location": location}, cookies=[cookie])
+            if oidc and path == "/auth/callback" and self.command == "GET":
+                session, cookies = oidc.callback(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query), self.headers)
+                with registry.lock, registry.db: registry.audit("login", {"actor": session["sub"]})
+                return self.send(302, {}, headers={"Location": "/"}, cookies=cookies)
+            if oidc and path == "/auth/logout" and self.command == "POST":
+                session, cookie, location = oidc.logout(self.headers)
+                with registry.lock, registry.db: registry.audit("logout", {"actor": session["sub"]})
+                return self.send(200, {"logout_url": location}, cookies=[cookie])
             assets = {"/": ("index.html", "text/html; charset=utf-8"),
                       "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                       "/style.css": ("style.css", "text/css; charset=utf-8")}
@@ -234,12 +261,22 @@ def handler(registry, token):
                 return self.send(200, (ROOT / "static" / filename).read_bytes(), content_type)
             if not path.startswith("/api/"):
                 return self.send(404, {"error": "Not found"})
-            supplied = self.headers.get("Authorization", "")
-            if not hmac.compare_digest(supplied.encode(), ("Bearer " + token).encode()):
-                return self.send(401, {"error": "Administrator token required"})
             origin = self.headers.get("Origin")
-            if origin and urllib.parse.urlsplit(origin).netloc != self.headers.get("Host"):
-                return self.send(403, {"error": "Cross-origin requests are forbidden"})
+            if oidc:
+                if origin and origin != oidc.origin:
+                    return self.send(403, {"error": "Cross-origin requests are forbidden"})
+                identity = oidc.authenticate(self.headers, mutation=self.command != "GET")
+                actor = identity["sub"]
+            else:
+                supplied = self.headers.get("Authorization", "")
+                if not hmac.compare_digest(supplied.encode(), ("Bearer " + token).encode()):
+                    return self.send(401, {"error": "Administrator token required"})
+                if origin and urllib.parse.urlsplit(origin).netloc != self.headers.get("Host"):
+                    return self.send(403, {"error": "Cross-origin requests are forbidden"})
+                identity = {"sub": "local-admin-token", "name": "Local administrator", "csrf": None}
+                actor = identity["sub"]
+            if path == "/api/session" and self.command == "GET":
+                return self.send(200, identity)
             try:
                 data = None
                 if self.command in ("POST", "PUT"):
@@ -252,14 +289,14 @@ def handler(registry, token):
                 if path == "/api/servers" and self.command == "GET":
                     return self.send(200, {"servers": registry.servers(), "public_url": registry.public_url})
                 if path == "/api/servers" and self.command == "POST":
-                    return self.send(201, registry.save(data, create=True))
+                    return self.send(201, registry.save(data, create=True, actor=actor))
                 match = re.fullmatch(r"/api/servers/([a-z][a-z0-9-]{0,62})", path)
                 if match and self.command == "PUT":
                     if not isinstance(data, dict) or data.get("id") != match[1]:
                         raise ValueError("Server ID must match URL")
-                    return self.send(200, registry.save(data))
+                    return self.send(200, registry.save(data, actor=actor))
                 if match and self.command == "DELETE":
-                    registry.delete(match[1])
+                    registry.delete(match[1], actor=actor)
                     return self.send(200, {"deleted": match[1]})
                 if path == "/api/preview" and self.command == "GET":
                     return self.send(200, registry.preview())
@@ -268,7 +305,7 @@ def handler(registry, token):
                 if path == "/api/publish" and self.command == "POST":
                     if not isinstance(data, dict) or set(data) != {"revision"}:
                         raise ValueError("Provide the reviewed revision")
-                    return self.send(202, registry.publish(data["revision"]))
+                    return self.send(202, registry.publish(data["revision"], actor=actor))
                 return self.send(404, {"error": "Not found"})
             except FileExistsError as error:
                 self.send(409, {"error": str(error)})
@@ -287,14 +324,25 @@ def handler(registry, token):
 
 
 def main():
-    token = os.environ.get("CONTROL_PLANE_TOKEN", "")
-    if len(token) < 32 or not token.isascii() or any(c.isspace() for c in token):
-        raise SystemExit("CONTROL_PLANE_TOKEN must contain at least 32 ASCII characters without whitespace")
+    mode = os.environ.get("AUTH_MODE", "oidc")
+    token, oidc = None, None
+    if mode == "oidc":
+        oidc = Auth0OIDC(os.environ.get("AUTH0_DOMAIN", ""), os.environ.get("AUTH0_CLIENT_ID", ""),
+                        os.environ.get("AUTH0_CLIENT_SECRET", ""), os.environ.get("AUTH0_AUDIENCE", ""),
+                        os.environ.get("CONTROL_PLANE_PUBLIC_URL", ""),
+                        os.environ.get("AUTH0_ADMIN_PERMISSION", "control-plane:admin"),
+                        os.environ.get("SESSION_SECONDS", "900"))
+    elif mode == "token":
+        token = os.environ.get("CONTROL_PLANE_TOKEN", "")
+        if len(token) < 32 or not token.isascii() or any(c.isspace() for c in token):
+            raise SystemExit("CONTROL_PLANE_TOKEN must contain at least 32 ASCII characters without whitespace")
+    else:
+        raise SystemExit("AUTH_MODE must be oidc or token")
     database = os.environ.get("REGISTRY_DATABASE", "registry.sqlite3")
     namespace = os.environ.get("PUBLISH_NAMESPACE")
     publisher = KubernetesPublisher(namespace) if namespace else None
     registry = Registry(database, os.environ["GATEWAY_PUBLIC_URL"], publisher)
-    server = ThreadingHTTPServer((os.environ.get("CONTROL_PLANE_HOST", "127.0.0.1"), int(os.environ.get("PORT", "8080"))), handler(registry, token))
+    server = ThreadingHTTPServer((os.environ.get("CONTROL_PLANE_HOST", "127.0.0.1"), int(os.environ.get("PORT", "8080"))), handler(registry, token=token, oidc=oidc))
     server.serve_forever()
 
 

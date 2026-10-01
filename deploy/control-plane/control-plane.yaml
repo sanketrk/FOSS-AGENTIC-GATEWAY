@@ -67,11 +67,29 @@ spec:
             - name: http
               containerPort: 8080
           env:
-            - name: CONTROL_PLANE_TOKEN
+            - name: AUTH_MODE
+              value: oidc
+            - name: AUTH0_DOMAIN
               valueFrom:
                 secretKeyRef:
-                  name: mcp-control-plane-auth
-                  key: token
+                  name: mcp-control-plane-auth0
+                  key: domain
+            - name: AUTH0_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-control-plane-auth0
+                  key: client-id
+            - name: AUTH0_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-control-plane-auth0
+                  key: client-secret
+            - name: AUTH0_AUDIENCE
+              value: https://mcp-control-plane
+            - name: AUTH0_ADMIN_PERMISSION
+              value: control-plane:admin
+            - name: CONTROL_PLANE_PUBLIC_URL
+              value: https://control.mcp.example.com
             - name: GATEWAY_PUBLIC_URL
               value: https://mcp.example.com
             - name: PUBLISH_NAMESPACE
