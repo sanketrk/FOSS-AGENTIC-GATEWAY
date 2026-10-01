@@ -1,0 +1,44 @@
+name: Validate gateway
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.32.0
+      - name: Validate repository configuration
+        run: |
+          sh -n tests/smoke.sh
+          ruby tests/validate-config.rb
+          kubectl kustomize deploy/openshift > /tmp/mcp-gateway-rendered.yaml
+          ruby -e 'require "yaml"; docs = YAML.load_stream(File.read("/tmp/mcp-gateway-rendered.yaml")); abort "unexpected rendered resource count" unless docs.length == 3'
+      - name: Build Kong OSS image
+        run: docker build --build-arg KONG_VERSION=3.9.0 --tag mcp-gateway:ci .
+      - name: Validate plugin, declarative config, and arbitrary-UID runtime
+        run: |
+          docker run --rm --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+            --user 12345:0 --volume "$PWD/tests:/tests:ro" --entrypoint /bin/sh mcp-gateway:ci -ec '
+              luajit /tests/handler_spec.lua
+              kong config parse /etc/kong/kong.yml >/dev/null
+              kong prepare
+            '
+      - name: Start image with restricted filesystem and arbitrary UID
+        run: |
+          docker run --detach --name mcp-gateway-scc-test --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,size=256m --user 12345:0 \
+            --publish 127.0.0.1:18100:8100 mcp-gateway:ci
+          trap 'docker rm -f mcp-gateway-scc-test >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18100/status >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs mcp-gateway-scc-test
+          exit 1
