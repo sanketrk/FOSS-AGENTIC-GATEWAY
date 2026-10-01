@@ -1,7 +1,7 @@
 local http = require "resty.http"
 local json = require "cjson.safe"
 local ACCESS_TOKEN = "urn:ietf:params:oauth:token-type:access_token"
-local Exchange = { PRIORITY = 700, VERSION = "0.1.0" }
+local Exchange = { PRIORITY = 700, VERSION = "0.2.0" }
 
 local function fail(status, message)
   -- Never return provider bodies, credentials, or tokens to callers.
@@ -14,14 +14,28 @@ local function https_url(value)
   return authority and not authority:find("@", 1, true)
 end
 
+local function resource_uri(value)
+  if type(value) ~= "string" or value:find("[%s#]") then return false end
+  if not value:match("^[A-Za-z][A-Za-z0-9+.-]*:.+$") then return false end
+  local authority = value:match("^[A-Za-z][A-Za-z0-9+.-]*://([^/?]+)")
+  if value:match("^https?://") and not authority then return false end
+  return not authority or not authority:find("@", 1, true)
+end
+
 function Exchange:access(conf)
-  local token = kong.ctx.shared.mcp_verified_access_token
-  if not token or kong.ctx.shared.mcp_verified_resource ~= conf.gateway_resource then
-    return fail(500, "Token exchange requires matching MCP gateway authentication")
-  end
-  -- Remove any original token even when the gateway's forwarding option is enabled.
+  -- Authentication is produced by a trusted plugin, never by caller headers.
   kong.service.request.clear_header("Authorization")
-  if not https_url(conf.token_endpoint) or not https_url(conf.resource) then
+  local identity = kong.ctx.shared.gateway_authentication
+  if type(identity) ~= "table" or identity.audience ~= conf.gateway_audience then
+    return fail(500, "Token exchange requires matching gateway authentication")
+  end
+  -- Public discovery remains anonymous even when exchange is enabled on its route.
+  if identity.authenticated == false and identity.access_token == nil then return end
+  local token = identity.access_token
+  if identity.authenticated ~= true or type(token) ~= "string" or token == "" then
+    return fail(500, "Token exchange requires verified gateway authentication")
+  end
+  if not https_url(conf.token_endpoint) or not resource_uri(conf.resource) then
     return fail(500, "Invalid token exchange configuration")
   end
   for _, scope in ipairs(conf.scopes) do

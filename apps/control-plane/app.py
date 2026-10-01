@@ -81,7 +81,7 @@ def generate(servers, public_url):
                 "paths": ["~" + endpoint + "$", "~" + metadata.replace(".", r"\.") + "$"],
                 "strip_path": True, "path_handling": "v0", "preserve_host": False,
                 "request_buffering": False, "response_buffering": False,
-                "plugins": [{"name": "mcp-gateway", "config": {
+                "plugins": [{"name": "mcp", "config": {
                     "resource_url": public_url + endpoint,
                     "resource_metadata_url": public_url + metadata,
                     "metadata_paths": [metadata],

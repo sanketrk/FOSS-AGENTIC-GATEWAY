@@ -1,7 +1,7 @@
 local typedefs = require "kong.db.schema.typedefs"
 
 return {
-  name = "mcp-token-exchange",
+  name = "token-exchange",
   fields = {
     { consumer = typedefs.no_consumer },
     { protocols = typedefs.protocols_http },
@@ -9,8 +9,8 @@ return {
       type = "record",
       fields = {
         { token_endpoint = { type = "string", required = true, match = "^https://" } },
-        { gateway_resource = { type = "string", required = true, match = "^https://" } },
-        { resource = { type = "string", required = true, match = "^https://" } },
+        { gateway_audience = { type = "string", required = true, len_min = 1 } },
+        { resource = { type = "string", required = true, match = "^[A-Za-z][A-Za-z0-9+.-]*:" } },
         { client_id = { type = "string", required = true } },
         { client_secret_file = { type = "string", required = true, match = "^/" } },
         { client_auth_method = { type = "string", one_of = { "client_secret_basic", "client_secret_post" }, default = "client_secret_basic" } },

@@ -1,6 +1,6 @@
 local typedefs = require "kong.db.schema.typedefs"
 return {
-  name = "a2a-gateway",
+  name = "a2a",
   fields = {
     { consumer = typedefs.no_consumer },
     { protocols = typedefs.protocols_http },

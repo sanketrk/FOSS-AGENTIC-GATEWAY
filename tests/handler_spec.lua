@@ -74,7 +74,7 @@ kong = {
   },
 }
 
-local gateway = require "kong.plugins.mcp-gateway.handler"
+local gateway = require "kong.plugins.mcp.handler"
 local config = {
   resource_url = "https://mcp.example.com/mcp",
   resource_metadata_url = "https://mcp.example.com/.well-known/oauth-protected-resource/mcp",
@@ -563,11 +563,11 @@ end)
 
 test("only authorized tokens enter exchange context", function()
   request()
-  assert(kong.ctx.shared.mcp_verified_access_token == "header.issuer11.signature")
-  assert(kong.ctx.shared.mcp_verified_resource == config.resource_url)
+  assert((kong.ctx.shared.gateway_authentication or {}).access_token == "header.issuer11.signature")
+  assert(kong.ctx.shared.gateway_authentication.audience == config.audience)
   current_claims = { exp = 2000, iss = "https://issuer.example.com/", aud = "wrong", scope = "mcp:access" }
   expect_status("unauthorized exchange subject", 401)
-  assert(not kong.ctx.shared.mcp_verified_access_token)
+  assert(not (kong.ctx.shared.gateway_authentication or {}).access_token)
   current_claims = { exp = 2000, iss = "https://issuer.example.com/", aud = config.audience, scope = "mcp:access" }
 end)
 
@@ -577,12 +577,12 @@ test("expiry and verifier errors fail closed before exchange", function()
     current_claims = { iss = config.authorization_servers[1].issuer, aud = config.audience,
       scope = "mcp:access", exp = expiry ~= false and expiry or nil }
     expect_status("invalid expiry", 401)
-    assert(not kong.ctx.shared.mcp_verified_access_token)
+    assert(not (kong.ctx.shared.gateway_authentication or {}).access_token)
   end
   current_claims = original
   verification_error = "JWT expired"
   expect_status("verifier error with claims", 401)
-  assert(not kong.ctx.shared.mcp_verified_access_token)
+  assert(not (kong.ctx.shared.gateway_authentication or {}).access_token)
   verification_error = nil
   request()
   assert(not state.response)

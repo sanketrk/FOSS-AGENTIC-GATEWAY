@@ -4,7 +4,7 @@ config = YAML.load_file("examples/gateway/a2a.yml")
 service = config.fetch("services").first
 route = service.fetch("routes").first
 plugin = route.fetch("plugins").first
-raise "incorrect plugin" unless plugin.fetch("name") == "a2a-gateway"
+raise "incorrect plugin" unless plugin.fetch("name") == "a2a"
 policy = plugin.fetch("config")
 raise "A2A operations must not retry" unless service.fetch("retries") == 0
 raise "A2A SSE must not buffer" unless route.fetch("request_buffering") == false && route.fetch("response_buffering") == false
@@ -13,7 +13,7 @@ raise "example path mismatch" unless route.fetch("paths").sort == [policy.fetch(
 raise "invalid audience" unless URI(policy.fetch("audience")).scheme == "https" && URI(policy.fetch("audience")).path == policy.fetch("rpc_path")
 raise "explicit versions required" unless policy.fetch("protocol_versions") == ["1.0", "0.3"]
 raise "token forwarding must be opt-in" unless policy.fetch("forward_bearer_token") == false
-raise "image missing plugin" unless File.read("gateway/Dockerfile").include?("COPY gateway/plugins/a2a-gateway")
+raise "image missing plugin" unless File.read("gateway/Dockerfile").include?("COPY gateway/plugins/a2a")
 env = YAML.load_file("deploy/openshift/gateway/deployment.yaml").dig("spec", "template", "spec", "containers").first.fetch("env")
-raise "deployment missing plugin" unless env.find { |item| item["name"] == "KONG_PLUGINS" }.fetch("value").split(",").include?("a2a-gateway")
+raise "deployment missing plugin" unless env.find { |item| item["name"] == "KONG_PLUGINS" }.fetch("value").split(",").include?("a2a")
 puts "A2A example and deployment checks passed."

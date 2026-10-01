@@ -1,6 +1,6 @@
 # FOSS-AGENTIC-GATEWAY: token exchange
 
-The `mcp-token-exchange` Kong OSS plugin implements outbound [RFC 8693 token exchange](https://www.rfc-editor.org/rfc/rfc8693). Enable it on an MCP route alongside `mcp-gateway`. It is vendor neutral and inactive by default.
+The `token-exchange` Kong OSS plugin implements outbound [RFC 8693 token exchange](https://www.rfc-editor.org/rfc/rfc8693). Enable it on an MCP or A2A route alongside `mcp` or `a2a`. It is vendor neutral and inactive by default.
 
 The gateway verifies the incoming token's signature, issuer, public resource audience, expiry, and scopes first. The exchange plugin authenticates to a trusted authorization server/STS and requests a separate upstream token. Only the exchanged token reaches the backend. The original token is sent only to the configured STS as the subject token, with no forwarding fallback.
 
@@ -9,10 +9,10 @@ The gateway verifies the incoming token's signature, issuer, public resource aud
 Add this entry to the same route's `plugins` array:
 
 ```yaml
-- name: mcp-token-exchange
+- name: token-exchange
   config:
     token_endpoint: https://sts.example.com/oauth/token
-    gateway_resource: https://mcp.example.com/mcp/server-a
+    gateway_audience: https://mcp.example.com/mcp/server-a
     resource: https://backend.example.com/mcp
     client_id: foss-agentic-gateway-exchange
     client_secret_file: /var/run/secrets/token-exchange/client-secret
@@ -22,16 +22,28 @@ Add this entry to the same route's `plugins` array:
     timeout_ms: 3000
 ```
 
-`gateway_resource` must exactly match the companion gateway plugin's `resource_url`. `resource` identifies the upstream protected resource. Destinations and scopes are administrator-controlled, never selected from incoming headers. Keep `forward_bearer_token: false`. Priority 700 runs exchange after gateway authentication at priority 800.
+`gateway_audience` must exactly match the companion `mcp` or `a2a` plugin's `audience`. For MCP, that audience is the public resource URI. A2A audiences may also be logical identifiers such as `urn:agent:a`. `resource` identifies the upstream protected resource using an absolute URI without a fragment, such as an HTTPS URL or URN. Only the configured HTTPS `token_endpoint` is contacted; the resource identifier is sent to the STS. Destinations and scopes are administrator-controlled, never selected from incoming headers. Keep `forward_bearer_token: false`. Priority 700 runs exchange after gateway authentication at priority 800.
 
 The STS must support the standard token-exchange grant, accept the incoming subject-token issuer, authorize this client for the resource/scopes, and issue tokens the backend can validate. Match `client_secret_basic` or `client_secret_post` to its registration. HTTPS verification is always enabled. An IdP supporting control-plane OIDC login does not establish token-exchange support.
 
+## Shared authentication contract
+
+Both authentication plugins populate `kong.ctx.shared.gateway_authentication` only after successful signature, issuer, expiry, audience, and scope checks:
+
+```lua
+{ authenticated = true, access_token = verified_token, audience = configured_audience }
+```
+
+The exchange plugin uses this context rather than parsing caller-supplied identity headers. Missing context, invalid authentication state, or a different configured audience fails closed. A trusted authentication plugin can explicitly mark public discovery as `{ authenticated = false, audience = configured_audience }` with no token. The A2A plugin uses this for public Agent Cards; exchange clears Authorization and skips the STS for those requests. Other authentication plugins may implement this contract without depending on MCP or A2A internals.
+
+For an A2A route, use the same exchange configuration with `gateway_audience` matching its A2A audience and `resource` identifying its backend. Keep both protocol plugins off each other's routes. Exchange remains an outbound OAuth capability, independent of JSON-RPC method or transport version.
+
 ## Deployment and secrets
 
-The image and deployment enable `bundled,mcp-gateway,mcp-token-exchange,a2a-gateway`; only an explicit route entry activates exchange. Store credentials outside declarative configuration:
+The image and deployment enable `bundled,mcp,a2a,token-exchange`; only an explicit route entry activates exchange. Store credentials outside declarative configuration:
 
 ```sh
-oc create secret generic mcp-token-exchange --from-file=client-secret=/path/to/local/client-secret -n foss-agentic-gateway
+oc create secret generic token-exchange --from-file=client-secret=/path/to/local/client-secret -n foss-agentic-gateway
 ```
 
 Add a read-only Secret volume to the gateway Deployment and mount it at `/var/run/secrets/token-exchange`. Ensure the arbitrary runtime UID can read the file. Apply route configuration and restart the gateway. The plugin rereads the mounted secret per exchange. Never put credentials in a ConfigMap or repository.
@@ -44,6 +56,6 @@ Requests use the standard exchange grant, access-token subject/requested types, 
 
 The trusted STS and backend enforce issued-token audience, delegation, and token semantics. Opaque backend tokens are supported; the plugin does not independently verify issued JWT claims. The backend must validate its token. Incoming tokens remain subject to the gateway's existing signed-JWT policy.
 
-Exchange occurs once per authorized proxied request, including legacy stream setup. There is no cache, retry, redirect following, or refresh-token persistence. Failures block forwarding with a generic 502; missing credentials return 503 and mismatched configuration returns 500. Provider bodies and credentials are not returned to callers. SSE remains unbuffered; token expiry during an established stream remains a backend concern.
+Exchange occurs once per authenticated proxied MCP or A2A request, including legacy MCP stream setup and protected A2A cards. Anonymous public A2A cards skip exchange and carry no upstream Authorization header. There is no cache, retry, redirect following, or refresh-token persistence. Failures block forwarding with a generic 502; missing credentials return 503 and missing authentication context or mismatched audience returns 500. Provider bodies and credentials are not returned to callers. SSE remains unbuffered; token expiry during an established stream remains a backend concern.
 
 Endpoint discovery, actor tokens, client assertions, and proprietary exchange grants are outside this implementation. Tests use protocol fixtures; live interoperability requires an exchange-capable STS and authenticated upstream.

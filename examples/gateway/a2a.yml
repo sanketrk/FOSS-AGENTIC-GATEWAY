@@ -17,7 +17,7 @@ services:
         request_buffering: false
         response_buffering: false
         plugins:
-          - name: a2a-gateway
+          - name: a2a
             config:
               rpc_path: /a2a/agent-a
               card_path: /.well-known/agent-card.json

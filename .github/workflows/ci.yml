@@ -22,8 +22,8 @@ jobs:
           from app import generate, validate
           from test_app import sample
           config = generate([validate(sample())], "https://mcp.example.com")
-          config["services"][0]["routes"][0]["plugins"].append({"name": "mcp-token-exchange", "config": {
-              "token_endpoint": "https://sts.example.com/token", "gateway_resource": "https://mcp.example.com/mcp/server-a",
+          config["services"][0]["routes"][0]["plugins"].append({"name": "token-exchange", "config": {
+              "token_endpoint": "https://sts.example.com/token", "gateway_audience": "https://mcp.example.com/mcp/server-a",
               "resource": "https://backend.example.com/mcp", "client_id": "gateway-client",
               "client_secret_file": "/var/run/secrets/token-exchange/client-secret", "scopes": ["tools:read"]}})
           with open("tests/exchange-kong.json", "w") as output: json.dump(config, output)
@@ -33,7 +33,20 @@ jobs:
           sh -n tests/smoke.sh
           ruby tests/validate-config.rb
           ruby tests/validate-a2a.rb
-          ruby -ryaml -rjson -e 'c = YAML.load_file("gateway/config/kong.yml"); a = YAML.load_file("examples/gateway/a2a.yml"); a["services"][0]["routes"][0]["plugins"][0]["config"]["public_card"] = false; c["services"].concat(a["services"]); File.write("tests/runtime-kong.json", JSON.generate(c))'
+          ruby -ryaml -rjson - <<'RUBY'
+          gateway = YAML.load_file("gateway/config/kong.yml")
+          agents = YAML.load_file("examples/gateway/a2a.yml")
+          route = agents["services"][0]["routes"][0]
+          route["plugins"][0]["config"]["public_card"] = false
+          gateway["services"].concat(agents["services"])
+          File.write("tests/runtime-kong.json", JSON.generate(gateway))
+          route["plugins"] << {"name" => "token-exchange", "config" => {
+            "token_endpoint" => "https://sts.example.com/token",
+            "gateway_audience" => route["plugins"][0]["config"]["audience"],
+            "resource" => "urn:backend:agent:a", "client_id" => "gateway-client",
+            "client_secret_file" => "/var/run/secrets/token-exchange/client-secret", "scopes" => ["a2a:access"]}}
+          File.write("tests/a2a-exchange-kong.json", JSON.generate(agents))
+          RUBY
           kubectl kustomize deploy/openshift/gateway > /tmp/foss-agentic-gateway-rendered.yaml
           ruby -e 'require "yaml"; docs = YAML.load_stream(File.read("/tmp/foss-agentic-gateway-rendered.yaml")); abort "unexpected rendered resource count" unless docs.length == 3'
       - name: Validate optional control plane deployment
@@ -54,8 +67,10 @@ jobs:
               luajit /tests/handler_spec.lua
               luajit /tests/token_exchange_spec.lua
               luajit /tests/a2a_spec.lua
+              luajit /tests/authentication_exchange_spec.lua
               kong config parse /examples/gateway/a2a.yml >/dev/null
               kong config parse /tests/exchange-kong.json >/dev/null
+              kong config parse /tests/a2a-exchange-kong.json >/dev/null
               kong config parse /etc/kong/kong.yml >/dev/null
               kong config parse /tests/generated-kong.json >/dev/null
               kong config parse /tests/empty-kong.json >/dev/null

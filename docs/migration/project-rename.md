@@ -32,4 +32,18 @@ New generic administrator-role examples use `agentic-admin`; deployments with an
 
 New Auth0 examples use the audience `https://foss-agentic-control-plane`. Existing tenants can keep `https://mcp-control-plane` in both `OIDC_API_AUDIENCE` and the optional authorization `audience` parameter; an application display-name change does not require an API identifier change. If changing an identifier, configure the API, user-delegated grant, permission, and role first, then update both audience settings and sign in again. Callback/logout URLs remain tied to `CONTROL_PLANE_PUBLIC_URL`, not the product name.
 
-Plugin IDs `mcp-gateway`, `a2a-gateway`, and `mcp-token-exchange` retain their protocol-specific names. Lua modules, public `/mcp` paths, scope policies, Agent Card formats, and configured resource audiences are not branding identifiers. The control plane remains an MCP registry; it does not yet administer A2A or exchange policies.
+## Plugin names and shared authentication
+
+Plugin names are now `mcp`, `a2a`, and `token-exchange`. This is a breaking configuration change:
+
+| Previous plugin | Current plugin / folder |
+| --- | --- |
+| `mcp-gateway` | `mcp` / `gateway/plugins/mcp/` |
+| `a2a-gateway` | `a2a` / `gateway/plugins/a2a/` |
+| `mcp-token-exchange` | `token-exchange` / `gateway/plugins/token-exchange/` |
+
+Update every declarative plugin `name` and set `KONG_PLUGINS=bundled,mcp,a2a,token-exchange`. Rebuild the gateway image and roll out image and configuration together; the new image does not contain aliases for old plugin IDs. Upgrade the control plane alongside the gateway because it now generates `mcp` entries.
+
+Replace exchange `gateway_resource` with `gateway_audience`, set to the companion protocol plugin's `audience`. Existing MCP configurations with matching audience/resource URI retain the same value. Exchange now works after either MCP or A2A authentication through `kong.ctx.shared.gateway_authentication`; custom plugins using the old `mcp_verified_*` fields must adopt the shared contract described in the [exchange guide](../plugins/token-exchange.md). Public A2A cards remain anonymous and skip exchange.
+
+Do not rename existing Kubernetes resources or mounted Secrets merely because a plugin name changes. Update Secret mounts only if choosing a new Secret name. Public `/mcp` paths, scopes, Agent Card formats, and resource audiences remain unchanged. The control plane remains an MCP registry; it does not yet administer A2A or exchange policies.

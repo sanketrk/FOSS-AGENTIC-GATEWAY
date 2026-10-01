@@ -1,6 +1,6 @@
 local json = require "cjson.safe"
 local openidc = require "resty.openidc"
-local Gateway = { PRIORITY = 800, VERSION = "0.1.0" }
+local Gateway = { PRIORITY = 800, VERSION = "0.2.0" }
 
 local function contains(values, item)
   for _, value in ipairs(values or {}) do if value == item then return true end end
@@ -45,11 +45,12 @@ local function authenticate(conf)
     return false, kong.response.exit(401, {message="Invalid access token"}, challenge)
   end
   -- Unverified issuer only selects an explicit trusted discovery configuration.
-  local claims = openidc.bearer_jwt_verify({
+  local claims, err = openidc.bearer_jwt_verify({
     discovery=server.discovery_url, ssl_verify="yes",
     token_signing_alg_values_expected=conf.signing_algorithms,
   })
-  if type(claims) ~= "table" or type(claims.exp) ~= "number" or claims.exp <= ngx.time() or claims.iss ~= server.issuer
+  if err or type(claims) ~= "table" or type(claims.exp) ~= "number"
+      or claims.exp ~= claims.exp or claims.exp == math.huge or claims.exp <= ngx.time() or claims.iss ~= server.issuer
       or not (claims.aud == conf.audience or type(claims.aud) == "table" and contains(claims.aud, conf.audience)) then
     challenge["WWW-Authenticate"] = 'Bearer error="invalid_token"'
     return false, kong.response.exit(401, {message="Invalid access token"}, challenge)
@@ -63,6 +64,9 @@ local function authenticate(conf)
       return false, kong.response.exit(403, {message="Insufficient scope"}, challenge)
     end
   end
+  kong.ctx.shared.gateway_authentication = {
+    authenticated = true, access_token = token, audience = conf.audience,
+  }
   if not conf.forward_bearer_token then kong.service.request.clear_header("Authorization") end
   return true
 end
@@ -81,6 +85,8 @@ function Gateway:access(conf)
       local ok, response = authenticate(conf)
       if not ok then return response end
     else
+      -- Explicit anonymous discovery must not trigger an outbound token exchange.
+      kong.ctx.shared.gateway_authentication = { authenticated = false, audience = conf.audience }
       kong.service.request.clear_header("Authorization")
     end
     -- Pass the card through without rewriting signed content or capabilities.

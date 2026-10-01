@@ -28,18 +28,19 @@ kong = {
   } },
 }
 package.preload["resty.openidc"] = function() return {} end
-local plugin = require "kong.plugins.mcp-token-exchange.handler"
-assert(plugin.PRIORITY < require("kong.plugins.mcp-gateway.handler").PRIORITY)
-local path = "/tmp/mcp-exchange-test-secret"
+local plugin = require "kong.plugins.token-exchange.handler"
+assert(plugin.PRIORITY < require("kong.plugins.mcp.handler").PRIORITY)
+assert(plugin.PRIORITY < require("kong.plugins.a2a.handler").PRIORITY)
+local path = "/tmp/token-exchange-test-secret"
 local f = assert(io.open(path, "w")); f:write("secret:value\n"); f:close()
 local conf = {
-  token_endpoint = "https://sts.example.com/token", gateway_resource = "https://gateway.example.com/mcp/a",
+  token_endpoint = "https://sts.example.com/token", gateway_audience = "https://gateway.example.com/mcp/a",
   resource = "https://backend.example.com/mcp", client_id = "client:id", client_secret_file = path,
   client_auth_method = "client_secret_basic", scopes = {"tools:read"}, timeout_ms = 3000,
 }
 local function reset(payload)
   calls, status, sent, upstream = 0, nil, nil, "Bearer original-token"
-  kong.ctx.shared = {mcp_verified_access_token = "original-token", mcp_verified_resource = conf.gateway_resource}
+  kong.ctx.shared = {gateway_authentication = {authenticated=true, access_token="original-token", audience=conf.gateway_audience}}
   response = {status=200, body=json.encode(payload or {
     access_token="backend-token", token_type="Bearer", issued_token_type="urn:ietf:params:oauth:token-type:access_token",
     expires_in=60, scope="tools:read",
@@ -56,10 +57,25 @@ reset(); conf.client_auth_method="client_secret_post"; plugin:access(conf)
 assert(sent.body.client_id==conf.client_id and sent.body.client_secret=="secret:value" and not sent.headers.Authorization)
 conf.client_auth_method="client_secret_basic"
 reset(); kong.ctx.shared={}; plugin:access(conf); assert(status==500 and calls==0)
-reset(); kong.ctx.shared.mcp_verified_resource="https://wrong.example.com"; plugin:access(conf); assert(status==500 and calls==0)
+reset(); kong.ctx.shared.gateway_authentication.audience="https://wrong.example.com"; plugin:access(conf); assert(status==500 and calls==0)
+reset(); kong.ctx.shared.gateway_authentication.authenticated=false
+kong.ctx.shared.gateway_authentication.access_token=nil
+plugin:access(conf); assert(not status and calls==0 and not upstream)
+reset(); kong.ctx.shared.gateway_authentication.access_token=nil
+plugin:access(conf); assert(status==500 and calls==0 and not upstream)
+reset(); kong.ctx.shared.gateway_authentication.authenticated=false
+plugin:access(conf); assert(status==500 and calls==0 and not upstream)
+reset(); conf.gateway_audience="urn:agent:a"; kong.ctx.shared.gateway_authentication.audience=conf.gateway_audience
+conf.resource="urn:backend:agent:a"; plugin:access(conf)
+assert(not status and calls==1 and sent.body.resource==conf.resource)
+conf.gateway_audience="https://gateway.example.com/mcp/a"; conf.resource="https://backend.example.com/mcp"
 reset(); conf.token_endpoint="http://sts.example.com/token"; plugin:access(conf); assert(status==500 and calls==0 and not upstream)
 conf.token_endpoint="https://sts.example.com/token"
 reset(); conf.resource="https://evil@example.com/"; plugin:access(conf); assert(status==500 and calls==0)
+conf.resource="https://backend.example.com/mcp"
+for _, invalid in ipairs({"relative/resource", "urn:backend:a#fragment", "https://"}) do
+  reset(); conf.resource=invalid; plugin:access(conf); assert(status==500 and calls==0 and not upstream)
+end
 conf.resource="https://backend.example.com/mcp"
 for _, code in ipairs({302,400,401,500}) do
   reset(); response.status=code; plugin:access(conf); assert(status==502 and not upstream)
@@ -76,6 +92,6 @@ for _, change in ipairs({
 end
 reset(); local body=json.decode(response.body); body.scope=nil; body.expires_in=nil; response.body=json.encode(body)
 plugin:access(conf); assert(not status and upstream=="Bearer backend-token")
-reset(); conf.client_secret_file="/tmp/no-such-mcp-exchange-secret"; plugin:access(conf); assert(status==503 and calls==0 and not upstream)
+reset(); conf.client_secret_file="/tmp/no-such-token-exchange-secret"; plugin:access(conf); assert(status==503 and calls==0 and not upstream)
 os.remove(path)
 print("Token exchange policy, request, response, and failure checks passed.")

@@ -20,7 +20,7 @@ services:
         request_buffering: false
         response_buffering: false
         plugins:
-          - name: mcp-gateway
+          - name: mcp
             config:
               resource_url: https://mcp.example.com/mcp
               resource_metadata_url: https://mcp.example.com/.well-known/oauth-protected-resource/mcp
@@ -61,7 +61,7 @@ services:
         request_buffering: false
         response_buffering: false
         plugins:
-          - name: mcp-gateway
+          - name: mcp
             config:
               resource_url: https://mcp.example.com/mcp/server-a
               resource_metadata_url: https://mcp.example.com/.well-known/oauth-protected-resource/mcp/server-a
@@ -101,7 +101,7 @@ services:
         request_buffering: false
         response_buffering: false
         plugins:
-          - name: mcp-gateway
+          - name: mcp
             config:
               resource_url: https://mcp.example.com/mcp/server-b
               resource_metadata_url: https://mcp.example.com/.well-known/oauth-protected-resource/mcp/server-b

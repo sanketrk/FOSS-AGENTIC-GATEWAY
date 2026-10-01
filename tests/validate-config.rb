@@ -25,7 +25,7 @@ services.each do |service|
     assert(route.fetch("request_buffering") == false, "request buffering must be disabled")
     assert(route.fetch("response_buffering") == false, "response buffering must be disabled")
     assert(service.fetch("retries") == 0, "non-idempotent MCP requests must not be retried")
-    config = route.fetch("plugins").find { |plugin| plugin.fetch("name") == "mcp-gateway" }.fetch("config")
+    config = route.fetch("plugins").find { |plugin| plugin.fetch("name") == "mcp" }.fetch("config")
     resource = URI.parse(config.fetch("resource_url"))
     metadata = URI.parse(config.fetch("resource_metadata_url"))
     assert(resource.scheme == "https" && metadata.scheme == "https", "public resource URLs must use HTTPS")

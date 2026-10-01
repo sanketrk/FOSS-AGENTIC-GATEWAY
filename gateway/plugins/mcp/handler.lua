@@ -2,7 +2,7 @@ local cjson = require "cjson.safe"
 local openidc = require "resty.openidc"
 
 local Gateway = {
-  VERSION = "1.1.0",
+  VERSION = "1.2.0",
   PRIORITY = 800,
 }
 
@@ -463,8 +463,9 @@ function Gateway:access(conf)
   end
 
   -- Only a verified, resource-bound and authorized token may be exchanged.
-  kong.ctx.shared.mcp_verified_access_token = token
-  kong.ctx.shared.mcp_verified_resource = conf.resource_url
+  kong.ctx.shared.gateway_authentication = {
+    authenticated = true, access_token = token, audience = conf.audience,
+  }
   if not conf.forward_bearer_token then
     kong.service.request.clear_header("Authorization")
   end
