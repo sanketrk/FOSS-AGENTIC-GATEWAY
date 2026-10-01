@@ -8,6 +8,7 @@
 | [Protocol interoperability](protocols/interoperability.md) | Implemented profiles and their limits |
 | [A2A plugin](protocols/a2a.md) | JSON-RPC transport, Agent Cards, authentication, and configuration |
 | [Token exchange](plugins/token-exchange.md) | RFC 8693 MCP/A2A upstream exchange and credential mounting |
+| [Python SDK](../sdk/python/README.md) | Gateway clients and mandatory JWT exchange policy for responders |
 | [Banking examples](../examples/banking/README.md) | Runnable agent-to-agent and agent-to-MCP scenarios with token exchange |
 | [Project migration](migration/project-rename.md) | Repository, directory, deployment, and identity migration |
 

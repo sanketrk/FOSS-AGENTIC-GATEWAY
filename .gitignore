@@ -12,3 +12,4 @@ tests/generated-kong.json
 tests/exchange-kong.json
 tests/runtime-kong.json
 .venv/
+*.egg-info/

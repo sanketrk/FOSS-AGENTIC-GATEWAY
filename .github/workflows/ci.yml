@@ -34,7 +34,9 @@ jobs:
           ruby tests/validate-config.rb
           ruby tests/validate-a2a.rb
           ruby tests/validate-banking.rb
-          PYTHONPATH=examples/banking python3 -m unittest discover -s tests/banking -v
+          python3 -m pip install -e sdk/python
+          python3 -m unittest discover -s sdk/python/tests -v
+          PYTHONPATH=examples/banking/infrastructure:examples/banking/transaction-review-agent:examples/banking/accounts-mcp-server:examples/banking/transactions-mcp-server python3 -m unittest discover -s tests/banking -v
           ruby -ryaml -rjson - <<'RUBY'
           gateway = YAML.load_file("gateway/config/kong.yml")
           agents = YAML.load_file("examples/gateway/a2a.yml")
@@ -101,8 +103,11 @@ jobs:
         env:
           BANKING_GATEWAY_IMAGE: foss-agentic-gateway:ci
         run: |
-          docker compose -f examples/banking/compose.yml build prepare
+          docker compose -f examples/banking/compose.yml build prepare banking-orchestrator review-agent accounts transactions
           trap 'docker compose -f examples/banking/compose.yml down -v >/dev/null 2>&1 || true' EXIT
           docker compose -f examples/banking/compose.yml run --rm prepare
           docker compose -f examples/banking/compose.yml up -d --wait --wait-timeout 120 issuer review-agent accounts transactions gateway
-          docker compose -f examples/banking/compose.yml run --rm client client.py all
+          docker compose -f examples/banking/compose.yml run --rm banking-orchestrator all
+          docker compose -f examples/banking/compose.yml run --rm --entrypoint python \
+            --env BANKING_INTEGRATION=1 --volume "$PWD/tests/banking/test_end_to_end.py:/demo/test_end_to_end.py:ro" \
+            banking-orchestrator -m unittest -v test_end_to_end

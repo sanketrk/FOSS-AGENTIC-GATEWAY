@@ -1,0 +1,13 @@
+*
+!sdk/
+!sdk/python/
+!sdk/python/**
+!examples/
+!examples/banking/
+!examples/banking/**
+**/__pycache__/
+**/*.egg-info/
+**/.env
+**/.env.*
+**/*.pem
+**/*.key

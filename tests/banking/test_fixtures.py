@@ -15,9 +15,13 @@ from unittest.mock import patch
 
 import jwt
 
-from common import (AGENT_ID, EXCHANGE_ID, ISSUER, POLICIES, ACCESS_TOKEN, EXCHANGE_GRANT, public_key)
-from prepare import prepare
-from serve import handler
+from banking_demo.config import (AGENT_ID, EXCHANGE_ID, ISSUER, POLICIES, ACCESS_TOKEN, EXCHANGE_GRANT)
+from foss_agentic_gateway import GatewayError, OAuthClientCredentials
+from banking_demo.prepare import prepare
+from banking_demo.issuer import handler as issuer_handler, public_key
+from review_agent import handler as review_handler
+from accounts_server import handler as accounts_handler
+from transactions_server import handler as transactions_handler
 
 
 class BankingFixtures(unittest.TestCase):
@@ -30,7 +34,8 @@ class BankingFixtures(unittest.TestCase):
         cls.servers, cls.threads, cls.urls = [], [], {}
         for kind in ('issuer', 'review', 'accounts', 'transactions'):
             directory = cls.root / ('issuer' if kind == 'issuer' else 'backend')
-            server = ThreadingHTTPServer(('127.0.0.1', 0), handler(kind, directory))
+            factory = {'issuer': issuer_handler, 'review': review_handler, 'accounts': accounts_handler, 'transactions': transactions_handler}[kind]
+            server = ThreadingHTTPServer(('127.0.0.1', 0), factory(directory))
             if kind == 'issuer':
                 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
                 context.load_cert_chain(str(directory / 'tls.pem'), str(directory / 'tls.key'))
@@ -132,6 +137,27 @@ class BankingFixtures(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(response['result']['message']['role'], 'ROLE_AGENT')
         self.assertEqual(response['result']['message']['metadata']['verified_upstream_identity']['actor'], EXCHANGE_ID)
+
+    def test_sdk_token_acquisition_and_redirect_rejection(self):
+        provider = OAuthClientCredentials(token_endpoint=self.urls['issuer'] + '/token', client_id=AGENT_ID,
+            client_secret=(self.root / 'issuer' / 'agent-secret').read_text(), ca_file=str(self.root / 'client' / 'ca.pem'))
+        p = POLICIES['accounts']
+        token = provider.get_token(p['audience'], (p['gateway_scope'],))
+        claims = jwt.decode(token, public_key(self.root / 'backend'), algorithms=['RS256'], issuer=ISSUER, audience=p['audience'])
+        self.assertEqual(claims['scope'], p['gateway_scope'])
+        class Redirect(issuer_handler(self.root / 'issuer')):
+            def do_POST(inner):
+                inner.send(302, headers={'Location': self.urls['accounts'] + '/healthz'})
+        server = ThreadingHTTPServer(('127.0.0.1', 0), Redirect)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(str(self.root / 'issuer' / 'tls.pem'), str(self.root / 'issuer' / 'tls.key'))
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+        try:
+            provider.token_endpoint = f'https://localhost:{server.server_port}/token'
+            with self.assertRaisesRegex(GatewayError, 'HTTP 302'):
+                provider.get_token(p['audience'], (p['gateway_scope'],))
+        finally: server.shutdown(); server.server_close(); thread.join()
 
     def test_credentials_are_separated(self):
         for name in ('gateway', 'backend', 'client'):

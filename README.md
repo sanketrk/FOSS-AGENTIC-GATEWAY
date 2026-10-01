@@ -31,6 +31,7 @@ deploy/openshift/
   control-plane/                Optional control-plane overlay
 docs/                          Setup, providers, protocols, plugins, and migration
 examples/gateway/              Optional gateway configurations
+sdk/python/                    Shared gateway client and exchanged-token verification SDK
 tests/control-plane/           Python control-plane tests
 tests/                         Gateway and deployment checks
 ```
@@ -51,7 +52,7 @@ cd FOSS-AGENTIC-GATEWAY
 
 ## Banking examples
 
-[Run the banking examples](examples/banking/README.md) to see an agent call another agent over A2A, call one MCP server, or combine results from multiple MCP servers. Each route exchanges its gateway token for a separate backend token. The local demo includes synthetic banking data, a disposable issuer/STS, verified TLS, and negative authorization checks.
+[Run the banking examples](examples/banking/README.md) to see an agent call another agent over A2A, call one MCP server, or combine results from multiple MCP servers. Four standalone component folders use the [Python SDK](sdk/python/README.md) for gateway calls and mandatory backend exchange-token verification. Each route exchanges its gateway token for a separate backend token. The local demo includes synthetic banking data, a disposable issuer/STS, verified TLS, and negative authorization checks.
 
 ## Features
 

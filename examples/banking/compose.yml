@@ -1,14 +1,18 @@
 name: banking-examples
 
-x-fixture: &fixture
-  image: foss-agentic-banking-fixtures:local
-  build:
-    context: .
+x-service: &service
   user: "1001:0"
   read_only: true
   tmpfs: [/tmp]
   security_opt: ["no-new-privileges:true"]
   cap_drop: [ALL]
+
+x-infrastructure: &infrastructure
+  <<: *service
+  image: foss-agentic-banking-infrastructure:local
+  build:
+    context: ../..
+    dockerfile: examples/banking/infrastructure/Dockerfile
 
 x-backend-health: &backend-health
   test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=2)"]
@@ -18,10 +22,10 @@ x-backend-health: &backend-health
 
 services:
   prepare:
-    <<: *fixture
+    <<: *infrastructure
     profiles: [tools]
     user: "0:0"
-    command: [prepare.py]
+    command: [-m, banking_demo.prepare]
     network_mode: none
     volumes:
       - issuer-credentials:/runtime/issuer
@@ -30,10 +34,8 @@ services:
       - agent-credentials:/runtime/client
 
   issuer:
-    <<: *fixture
-    command: [serve.py]
-    environment:
-      DEMO_SERVICE: issuer
+    <<: *infrastructure
+    command: [-m, banking_demo.issuer]
     volumes: ["issuer-credentials:/credentials:ro"]
     networks: [agents, backends]
     healthcheck:
@@ -43,28 +45,31 @@ services:
       retries: 30
 
   review-agent:
-    <<: *fixture
-    command: [serve.py]
-    environment:
-      DEMO_SERVICE: review
+    <<: *service
+    image: foss-agentic-banking-review-agent:local
+    build:
+      context: ../..
+      dockerfile: examples/banking/transaction-review-agent/Dockerfile
     volumes: ["backend-credentials:/credentials:ro"]
     networks: [backends]
     healthcheck: *backend-health
 
   accounts:
-    <<: *fixture
-    command: [serve.py]
-    environment:
-      DEMO_SERVICE: accounts
+    <<: *service
+    image: foss-agentic-banking-accounts:local
+    build:
+      context: ../..
+      dockerfile: examples/banking/accounts-mcp-server/Dockerfile
     volumes: ["backend-credentials:/credentials:ro"]
     networks: [backends]
     healthcheck: *backend-health
 
   transactions:
-    <<: *fixture
-    command: [serve.py]
-    environment:
-      DEMO_SERVICE: transactions
+    <<: *service
+    image: foss-agentic-banking-transactions:local
+    build:
+      context: ../..
+      dockerfile: examples/banking/transactions-mcp-server/Dockerfile
     volumes: ["backend-credentials:/credentials:ro"]
     networks: [backends]
     healthcheck: *backend-health
@@ -100,10 +105,13 @@ services:
       timeout: 5s
       retries: 30
 
-  client:
-    <<: *fixture
+  banking-orchestrator:
+    <<: *service
     profiles: [tools]
-    command: [client.py, all]
+    image: foss-agentic-banking-orchestrator:local
+    build:
+      context: ../..
+      dockerfile: examples/banking/banking-orchestrator/Dockerfile
     volumes: ["agent-credentials:/credentials:ro"]
     networks: [agents]
     depends_on:

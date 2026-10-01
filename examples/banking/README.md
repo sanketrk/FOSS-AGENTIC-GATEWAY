@@ -43,12 +43,12 @@ docker compose -f examples/banking/compose.yml up -d --wait issuer review-agent 
 
 `prepare` generates disposable keys, certificates, and random client secrets into separate named volumes. Only the issuer receives its signing key. The gateway receives its own exchange credential, the caller receives only its agent credential, and backends receive public verification keys. Initialization runs without a network. Stop existing demo containers before running `prepare` again, since it rotates these credentials.
 
-The caller runs on the Compose `agents` network and uses `https://gateway:8443`; that DNS name is internal to Compose. There is no host DNS configuration to perform. The gateway's HTTPS port is also bound to `127.0.0.1:8443` for local inspection. The CA is not installed into the host trust store.
+The `banking-orchestrator` runs on the Compose `agents` network and uses `https://gateway:8443`; that DNS name is internal to Compose. There is no host DNS configuration to perform. The gateway's HTTPS port is also bound to `127.0.0.1:8443` for local inspection. The CA is not installed into the host trust store.
 
 ## 1. An agent calls another agent
 
 ```sh
-docker compose -f examples/banking/compose.yml run --rm client client.py a2a
+docker compose -f examples/banking/compose.yml run --rm banking-orchestrator a2a
 ```
 
 The orchestrator fetches the public card at `/cards/transaction-review`, acquires a JWT for the gateway A2A audience, and sends `SendMessage` with `A2A-Version: 1.0`. The gateway exchanges that JWT for the review agent's resource and calls its private `/rpc` endpoint. The responder returns an A2A `SendMessageResponse.message` summarizing synthetic merchant purchase `DEMO-TX-003`.
@@ -58,7 +58,7 @@ The example uses the [A2A 1.0 JSON-RPC HTTP binding](https://a2a-protocol.org/la
 ## 2. An agent calls one MCP server
 
 ```sh
-docker compose -f examples/banking/compose.yml run --rm client client.py mcp accounts
+docker compose -f examples/banking/compose.yml run --rm banking-orchestrator mcp accounts
 ```
 
 The orchestrator reads OAuth protected-resource metadata, obtains an account-specific gateway token, and performs `initialize`, `notifications/initialized`, `tools/list`, and `tools/call`. It requests `get_account_summary` for synthetic account `DEMO-001`, returning its INR balance and status.
@@ -68,7 +68,7 @@ The MCP fixtures use the gateway's [2025-11-25 Streamable HTTP compatibility pro
 ## 3. An agent calls multiple MCP servers
 
 ```sh
-docker compose -f examples/banking/compose.yml run --rm client client.py mcp accounts transactions
+docker compose -f examples/banking/compose.yml run --rm banking-orchestrator mcp accounts transactions
 ```
 
 The same orchestrator obtains a separate gateway token for each MCP audience, opens each server independently, and combines the account summary with three synthetic recent transactions. Each request is exchanged for that server's backend audience and scopes. An account token cannot be reused against the transactions endpoint.
@@ -89,13 +89,13 @@ The receipt is fixture output after backend JWT verification, not an identity he
 
 ## Verify and stop
 
-Run all scenarios plus negative checks:
+Run all scenarios:
 
 ```sh
-docker compose -f examples/banking/compose.yml run --rm client client.py all
+docker compose -f examples/banking/compose.yml run --rm banking-orchestrator all
 ```
 
-The client asserts that exchanged identities match each backend, and that wrong gateway audiences, missing tokens, and attempts to exchange with caller credentials are rejected. Fixture tests also verify that backends reject original gateway tokens and tokens for a different backend, and that the STS rejects expired subjects and expanded scopes. CI runs both these tests and this real Kong/Compose demo.
+The responders mandate SDK verification before dispatch. CI integration tests assert that exchanged identities match each backend and that a wrong gateway audience is rejected. Fixture tests also verify that backends reject original gateway tokens and tokens for a different backend, and that the STS rejects expired subjects and expanded scopes. CI runs both these tests and this real Kong/Compose demo.
 
 The backend services have no published ports and join only the internal `backends` network; the caller joins only `agents`. Backend HTTP is isolated to this local demo network. Use your deployment's authenticated encrypted backend transport and network controls when adapting the topology.
 
@@ -105,16 +105,30 @@ docker compose -f examples/banking/compose.yml down -v
 
 This removes only the demo's containers, networks, and credential volumes.
 
-## Files and adaptation
+## Four standalone components and the SDK
 
-| File | Purpose |
-| --- | --- |
-| [kong.yml](kong.yml) | One A2A and two MCP routes, each with its own exchange policy |
-| [compose.yml](compose.yml) | Local gateway, issuer, backends, caller, isolated networks, and credential mounts |
-| [client.py](client.py) | Agent-to-agent and agent-to-MCP request sequences |
-| [serve.py](serve.py) | Bounded synthetic issuer/STS, review agent, and MCP responders |
-| [common.py](common.py) | Example audience/scope policies, JWT checks, and synthetic banking data |
-| [prepare.py](prepare.py) | Disposable CA, service certificates, keys, and separate client credentials |
+```text
+examples/banking/
+  banking-orchestrator/         Calling agent: SDK-based A2A/MCP orchestration
+  transaction-review-agent/    Receiving A2A agent: review business logic
+  accounts-mcp-server/         MCP server: account data and summary tool
+  transactions-mcp-server/     MCP server: transaction data and recent-transactions tool
+  infrastructure/              Local issuer/STS, preparation, policies and HTTP adapter
+  compose.yml                  Separate images, networks and credential mounts
+  kong.yml                     A2A/MCP routes and mandatory exchange plugin configuration
+sdk/python/                    Shared installable gateway SDK
+```
+
+Each of the four application folders owns its code, README and Dockerfile. Each runs as a separate process and Docker image. Shared OAuth/JWT/protocol behavior lives in the [SDK](../../sdk/python/README.md), which is installed into each application image. Infrastructure is separate from application business logic.
+
+| Component | Application source | SDK integration |
+| --- | --- | --- |
+| [Banking orchestrator](banking-orchestrator/README.md) | [orchestrator.py](banking-orchestrator/orchestrator.py) | `GatewayClient.send_message()` and `call_tool()` |
+| [Review agent](transaction-review-agent/README.md) | [review_agent.py](transaction-review-agent/review_agent.py) | `ExchangeTokenVerifier` before A2A dispatch |
+| [Accounts server](accounts-mcp-server/README.md) | [accounts_server.py](accounts-mcp-server/accounts_server.py) | `ExchangeTokenVerifier` before MCP dispatch |
+| [Transactions server](transactions-mcp-server/README.md) | [transactions_server.py](transactions-mcp-server/transactions_server.py) | `ExchangeTokenVerifier` before MCP dispatch |
+
+The SDK client permits gateway-relative endpoints over verified HTTPS. Each backend requires a trusted signature, its own audience/scopes, and the signed gateway actor claim `act.sub=banking-gateway`. Original tokens and tokens lacking that actor are rejected before business logic. The gateway performs RFC 8693 exchange; the caller does not receive the gateway exchange credential. Receipts remain diagnostic output and are never used as security proof. See the [SDK exchange policy](../../sdk/python/README.md#backend-mandate-the-exchange-policy-before-dispatch) for the required STS actor configuration and initial protocol limits.
 
 To adapt the examples, configure an exchange-capable OAuth authorization server with separate agent and gateway clients, map gateway audiences/scopes to backend resources/scopes, and replace the fixtures with your actual A2A agent and MCP servers. Configure the gateway with the real HTTPS discovery/token endpoints and trusted CA bundle. The STS and backend must agree on subject/actor claims and enforce their own authorization policies; an OIDC login provider alone does not establish token-exchange support.
 
