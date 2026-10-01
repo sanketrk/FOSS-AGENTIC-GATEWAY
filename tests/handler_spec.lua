@@ -3,8 +3,9 @@ package.path = "/usr/local/openresty/lualib/?.lua;/usr/local/openresty/lualib/?/
 package.cpath = "/usr/local/openresty/lualib/?.so;" .. package.cpath
 
 local cjson = require "cjson.safe"
-local current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
+local current_claims = { exp = 2000, iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
 local test_token_issuer = "issuer11"
+local verification_error
 local token_verifications = 0
 local verified_discovery
 local last_decoded_value
@@ -20,12 +21,13 @@ package.preload["resty.openidc"] = function()
     bearer_jwt_verify = function(opts)
       token_verifications = token_verifications + 1
       verified_discovery = opts.discovery
-      return current_claims
+      return current_claims, verification_error
     end,
   }
 end
 
 ngx = {
+  time = function() return 1000 end,
   decode_base64 = function(value)
     last_decoded_value = value
     return decoded_values[value] or decoded_values[value:gsub("=", "")]
@@ -227,7 +229,7 @@ test("a token from each advertised issuer uses only its configured discovery URL
     issuer = "https://second-idp.example.com/",
     discovery_url = "https://second-idp.example.com/.well-known/openid-configuration",
   }
-  current_claims = { iss = "https://second-idp.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
+  current_claims = { exp = 2000, iss = "https://second-idp.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
   test_token_issuer = "issuer22"
   request({ headers = { authorization = "Bearer a.issuer-two.c" } })
   assert(not state.response, "token from second configured IdP should be accepted")
@@ -235,7 +237,7 @@ test("a token from each advertised issuer uses only its configured discovery URL
     "issuer must select its matching configured discovery URL")
   config.authorization_servers[2] = nil
   test_token_issuer = "issuer11"
-  current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
+  current_claims = { exp = 2000, iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
 end)
 
 test("unknown JWT issuers are rejected without contacting an unconfigured issuer", function()
@@ -526,15 +528,15 @@ test("legacy session response headers are retained", function()
 end)
 
 test("scope and audience restrictions still apply", function()
-  current_claims = { iss = "https://issuer.example.com/", aud = "wrong", scope = "mcp:access" }
+  current_claims = { exp = 2000, iss = "https://issuer.example.com/", aud = "wrong", scope = "mcp:access" }
   expect_status("wrong audience", 401)
-  current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "other" }
+  current_claims = { exp = 2000, iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "other" }
   expect_status("missing scope", 403)
   assert(state.response.headers["WWW-Authenticate"]:find('error="insufficient_scope"', 1, true),
     "scope failure challenge must identify insufficient scope")
   assert(state.response.headers["WWW-Authenticate"]:find('scope="mcp:access"', 1, true),
     "scope failure challenge must advertise the required scope")
-  current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
+  current_claims = { exp = 2000, iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
 end)
 
 test("per-server audiences and scopes reject tokens for another server", function()
@@ -547,26 +549,43 @@ test("per-server audiences and scopes reject tokens for another server", functio
   config.resource_metadata_url = "https://mcp.example.com/.well-known/oauth-protected-resource/mcp/server-b"
   config.metadata_paths = { "/.well-known/oauth-protected-resource/mcp/server-b" }
 
-  current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp/server-a", scope = "mcp:server-a:access" }
+  current_claims = { exp = 2000, iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp/server-a", scope = "mcp:server-a:access" }
   expect_status("server A token at server B", 401)
   assert(state.response.headers["WWW-Authenticate"]:find(config.resource_metadata_url, 1, true))
-  current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp/server-b", scope = "mcp:server-a:access" }
+  current_claims = { exp = 2000, iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp/server-b", scope = "mcp:server-a:access" }
   expect_status("server B audience without server B scope", 403)
-  current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp/server-b", scope = "mcp:server-b:access" }
+  current_claims = { exp = 2000, iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp/server-b", scope = "mcp:server-b:access" }
   request()
   assert(not state.response, "matching server policy should permit proxying")
   config = original
-  current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
+  current_claims = { exp = 2000, iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
 end)
 
 test("only authorized tokens enter exchange context", function()
   request()
   assert(kong.ctx.shared.mcp_verified_access_token == "header.issuer11.signature")
   assert(kong.ctx.shared.mcp_verified_resource == config.resource_url)
-  current_claims = { iss = "https://issuer.example.com/", aud = "wrong", scope = "mcp:access" }
+  current_claims = { exp = 2000, iss = "https://issuer.example.com/", aud = "wrong", scope = "mcp:access" }
   expect_status("unauthorized exchange subject", 401)
   assert(not kong.ctx.shared.mcp_verified_access_token)
-  current_claims = { iss = "https://issuer.example.com/", aud = config.audience, scope = "mcp:access" }
+  current_claims = { exp = 2000, iss = "https://issuer.example.com/", aud = config.audience, scope = "mcp:access" }
+end)
+
+test("expiry and verifier errors fail closed before exchange", function()
+  local original = current_claims
+  for _, expiry in ipairs({ false, "2000", 999, 1000, math.huge }) do
+    current_claims = { iss = config.authorization_servers[1].issuer, aud = config.audience,
+      scope = "mcp:access", exp = expiry ~= false and expiry or nil }
+    expect_status("invalid expiry", 401)
+    assert(not kong.ctx.shared.mcp_verified_access_token)
+  end
+  current_claims = original
+  verification_error = "JWT expired"
+  expect_status("verifier error with claims", 401)
+  assert(not kong.ctx.shared.mcp_verified_access_token)
+  verification_error = nil
+  request()
+  assert(not state.response)
 end)
 
 io.write("1..", passed, "\n")

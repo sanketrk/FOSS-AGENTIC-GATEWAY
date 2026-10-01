@@ -28,6 +28,7 @@ jobs:
               "client_secret_file": "/var/run/secrets/token-exchange/client-secret", "scopes": ["tools:read"]}})
           with open("tests/exchange-kong.json", "w") as output: json.dump(config, output)
           PY
+          PYTHONPATH=apps/control-plane python3 -c 'import json; from app import generate; open("tests/empty-kong.json", "w").write(json.dumps(generate([], "https://mcp.example.com")))'
           node --check apps/control-plane/static/app.js
           sh -n tests/smoke.sh
           ruby tests/validate-config.rb
@@ -57,6 +58,7 @@ jobs:
               kong config parse /tests/exchange-kong.json >/dev/null
               kong config parse /etc/kong/kong.yml >/dev/null
               kong config parse /tests/generated-kong.json >/dev/null
+              kong config parse /tests/empty-kong.json >/dev/null
               kong config parse /tests/runtime-kong.json >/dev/null
               kong prepare
             '

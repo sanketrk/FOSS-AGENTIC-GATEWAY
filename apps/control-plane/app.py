@@ -162,8 +162,6 @@ class Registry:
                 raise FileExistsError("Draft changed; review the latest preview before publishing")
             if not self.publisher:
                 raise ValueError("Publishing is disabled; download the config for a manual rollout")
-            if not snapshot["config"]["services"]:
-                raise ValueError("Register at least one server before publishing")
             try:
                 result = self.publisher(snapshot)
             except Exception:

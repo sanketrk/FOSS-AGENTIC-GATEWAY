@@ -1,5 +1,5 @@
 'use strict';
-let gatewayPublicUrl = '', authMode = 'oidc', csrf = '', token = '', records = [], revision = '', config = null, editing = false;
+let gatewayPublicUrl = '', authMode = 'oidc', csrf = '', token = '', records = [], revision = '', config = null, editing = false, publishEnabled = false;
 const $ = id => document.getElementById(id);
 const node = (tag, text, cls) => { const el = document.createElement(tag); el.textContent = text; if (cls) el.className = cls; return el; };
 async function api(path, method = 'GET', data) {
@@ -17,7 +17,8 @@ async function refresh() {
   records = registry.servers; gatewayPublicUrl = registry.public_url;
   $('gateway-url').textContent = registry.public_url;
   $('publish-state').textContent = status.published?.revision === status.draft_revision ? 'Published configuration matches this draft' : 'Draft configuration · unpublished changes';
-  $('publish').disabled = !status.publish_enabled || !records.length;
+  publishEnabled = status.publish_enabled;
+  $('publish').disabled = !publishEnabled;
   $('publish').title = status.publish_enabled ? '' : 'Publishing requires Kubernetes configuration. Download the config instead.';
   $('servers').replaceChildren();
   if (!records.length) $('servers').append(node('p', 'No servers registered. Add your first MCP server to get started.', 'empty'));
@@ -93,11 +94,11 @@ $('review').onclick = async () => {
 };
 $('download').onclick = () => { const link = document.createElement('a'), url = URL.createObjectURL(new Blob([JSON.stringify(config, null, 2)], {type: 'application/json'})); link.href = url; link.download = 'kong.json'; link.click(); URL.revokeObjectURL(url); };
 $('publish').onclick = async () => {
-  if (!confirm('Replace the gateway configuration with this reviewed draft and start a rollout?')) return;
+  if (!confirm('Replace the gateway configuration with this reviewed draft and start a rollout? An empty draft removes all gateway routes.')) return;
   $('publish').disabled = true;
   try { await api('publish', 'POST', {revision}); $('preview').close(); await refresh(); message('Rollout requested. Check deployment readiness before considering this revision live.'); }
   catch (err) { $('publish-error').textContent = err.message; }
-  finally { if (records.length) $('publish').disabled = false; }
+  finally { $('publish').disabled = !publishEnabled; }
 };
 
 async function bootstrap() {

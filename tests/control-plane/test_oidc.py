@@ -6,7 +6,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from http.cookies import SimpleCookie
-from http.server import ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -201,7 +201,7 @@ class OIDCTests(unittest.TestCase):
         for method in ['client_secret_basic', 'client_secret_post', 'none']:
             self.auth.token_auth_method = method
             self.auth.resource = 'https://control.example.com'
-            with self.subTest(method=method), patch('oidc.urllib.request.urlopen') as fetch:
+            with self.subTest(method=method), patch('oidc.urllib.request.OpenerDirector.open') as fetch:
                 fetch.return_value.__enter__.return_value.read.return_value = b'{}'
                 self.auth.exchange('code', 'verifier')
                 request = fetch.call_args.args[0]
@@ -215,6 +215,40 @@ class OIDCTests(unittest.TestCase):
                 else:
                     self.assertNotIn('Authorization', request.headers)
                     self.assertNotIn('client_secret', body)
+
+    def test_token_endpoint_redirect_does_not_forward_credentials(self):
+        captured = []
+        class Receiver(BaseHTTPRequestHandler):
+            def log_message(self, *args): pass
+            def do_GET(self):
+                captured.append(self.headers.get('Authorization'))
+                self.send_response(200); self.end_headers(); self.wfile.write(b'{}')
+        receiver = ThreadingHTTPServer(('127.0.0.1', 0), Receiver)
+        class Redirect(BaseHTTPRequestHandler):
+            def log_message(self, *args): pass
+            def do_POST(self):
+                self.rfile.read(int(self.headers['Content-Length']))
+                self.send_response(302)
+                self.send_header('Location', f'http://127.0.0.1:{receiver.server_port}/capture')
+                self.end_headers()
+        redirect = ThreadingHTTPServer(('127.0.0.1', 0), Redirect)
+        threads = []
+        for server in (receiver, redirect):
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start(); threads.append(thread)
+        # Use loopback fixture endpoints to exercise the real redirect handler.
+        self.auth.metadata['token_endpoint'] = f'http://127.0.0.1:{redirect.server_port}/token'
+        try:
+            for method in ('client_secret_basic', 'client_secret_post', 'none'):
+                self.auth.token_auth_method = method
+                with self.subTest(method=method), self.assertRaises(urllib.error.HTTPError) as caught:
+                    self.auth.exchange('test-code', 'test-verifier')
+                self.assertEqual(caught.exception.code, 302)
+                caught.exception.close()
+            self.assertEqual(captured, [])
+        finally:
+            for server in (redirect, receiver): server.shutdown(); server.server_close()
+            for thread in threads: thread.join()
 
     def test_authorization_issuer_validation_precedes_token_exchange(self):
         calls = []

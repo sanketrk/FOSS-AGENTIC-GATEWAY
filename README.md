@@ -1,14 +1,23 @@
 # FOSS-AGENTIC-GATEWAY
 
-FOSS-AGENTIC-GATEWAY is a free and open-source gateway for agentic connectivity, built on Kong Gateway OSS and OpenResty under Apache-2.0. It provides MCP transport policies, optional A2A JSON-RPC routing, OAuth token exchange, and an OIDC administrator control plane. Identity providers and upstream agents are configurable.
+FOSS-AGENTIC-GATEWAY gives an enterprise one entry point for agents to access its MCP servers and A2A agents. Deploy the gateway inside your infrastructure, register or configure your upstream endpoints, and direct agent traffic through the gateway. Each endpoint has its own authentication, token audience, and scope policy.
 
-The plugins enforce transport and authentication policies. Upstream MCP servers and A2A agents implement application protocol semantics. The upstream MCP server must implement MCP methods, results, subscriptions, cancellation, session lifecycle, and any negotiated extensions. The gateway streams upstream SSE responses without buffering and passes through ordinary response headers/body. It validates the current request metadata and legacy JSON-RPC transport envelope, but does not validate all MCP method schemas or response semantics.
+```text
+Agent clients → FOSS-AGENTIC-GATEWAY → Internal MCP servers / A2A agents
+                        ↑
+              Administrator control plane
+```
 
-The control-plane authentication and MCP OAuth interfaces use provider-neutral configuration. See the [interoperability profile](docs/protocols/interoperability.md) for supported standards, tested behavior, deployment requirements, and limitations. Auth0 is an optional configuration example, not a required provider.
+Built on Kong Gateway OSS and OpenResty, the project provides:
 
-An optional [RFC 8693 token-exchange plugin](docs/plugins/token-exchange.md) exchanges verified gateway access tokens for separate upstream resource tokens. Enable it per route with a trusted STS and mounted client credentials.
+- **MCP gateway:** routes Streamable HTTP requests to multiple MCP servers, checks transport headers and JWT access tokens, publishes OAuth resource metadata, and forwards SSE streams.
+- **A2A gateway:** an optional plugin for Agent2Agent JSON-RPC HTTP traffic, Agent Cards, and SSE, configured on separate routes.
+- **Token exchange:** an optional MCP plugin that exchanges a verified gateway token for a separate upstream token through a trusted RFC 8693 security token service.
+- **Control plane:** an administrator UI and registration API with OIDC login, draft review, configuration export, and optional OpenShift/Kubernetes publication. It currently manages MCP registrations; A2A and token-exchange settings use deployment configuration.
 
-An optional [A2A gateway plugin](docs/protocols/a2a.md) proxies Agent2Agent JSON-RPC HTTP traffic, Agent Cards, and SSE using separate routes and JWT policies. Its transport profiles cover 1.0 and legacy 0.3.
+Identity configuration is vendor neutral. Auth0 is one documented OIDC provider example. The project is licensed under Apache-2.0.
+
+Upstream servers execute tools and agent tasks and own their protocol semantics and session lifecycle. The gateway enforces access and transport policy and proxies traffic; deploying it also requires configuring your issuer, upstream endpoints, TLS ingress, and backend access controls. See the [interoperability profile](docs/protocols/interoperability.md), [A2A guide](docs/protocols/a2a.md), and [token-exchange guide](docs/plugins/token-exchange.md) for supported behavior and limitations.
 
 ## Project layout
 
@@ -18,7 +27,7 @@ gateway/                       Gateway container, configuration, and Lua plugins
   config/                       Default Kong and OpenResty configuration
   plugins/                      MCP, A2A, and token-exchange plugins
 deploy/openshift/
- gateway/                      Base gateway manifests
+  gateway/                      Base gateway manifests
   control-plane/                Optional control-plane overlay
 docs/                          Setup, providers, protocols, plugins, and migration
 examples/gateway/              Optional gateway configurations

@@ -56,6 +56,12 @@ def claim_at_pointer(claims, pointer):
     return current
 
 
+class NoTokenRedirect(urllib.request.HTTPRedirectHandler):
+    """Never forward token endpoint credentials to a redirect destination."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 class OIDCClient:
     def __init__(self, issuer, client_id, client_secret, audience, origin,
                  admin_claim="/roles", admin_value="agentic-admin", admin_claim_source="id_token",
@@ -204,7 +210,8 @@ class OIDCClient:
             headers["Authorization"] = "Basic " + base64.b64encode(credentials.encode()).decode()
         if self.resource: params["resource"] = self.resource
         req = urllib.request.Request(metadata["token_endpoint"], data=urllib.parse.urlencode(params).encode(), headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as response: return json.load(response)
+        opener = urllib.request.build_opener(NoTokenRedirect())
+        with opener.open(req, timeout=10) as response: return json.load(response)
 
     def callback(self, query, headers):
         state = query.get("state", [""])

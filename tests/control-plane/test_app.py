@@ -64,7 +64,6 @@ class RegistryTests(unittest.TestCase):
     def test_publish_review_conflict_and_failure(self):
         calls = []
         self.registry.publisher = lambda snapshot: calls.append(snapshot) or {"state": "rollout_requested"}
-        with self.assertRaises(ValueError): self.registry.publish(self.registry.preview()["revision"])
         self.registry.save(sample(), create=True)
         revision = self.registry.preview()["revision"]
         self.registry.save(sample("server-b"), create=True)
@@ -79,6 +78,18 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(self.registry.status()["events"][0]["action"], "publish_failed")
         self.registry.delete("server-a")
         self.assertNotEqual(self.registry.status()["draft_revision"], new_revision)
+
+
+    def test_publish_empty_registry_removes_final_route(self):
+        calls = []
+        self.registry.publisher = lambda snapshot: calls.append(snapshot) or {"state": "rollout_requested"}
+        self.registry.save(sample(), create=True)
+        self.registry.publish(self.registry.preview()["revision"])
+        self.registry.delete("server-a")
+        revision = self.registry.preview()["revision"]
+        self.registry.publish(revision)
+        self.assertEqual(calls[-1]["config"]["services"], [])
+        self.assertEqual(self.registry.status()["published"]["revision"], revision)
 
 
 class PublisherTests(unittest.TestCase):

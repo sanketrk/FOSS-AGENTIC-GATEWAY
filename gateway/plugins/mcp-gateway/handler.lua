@@ -442,7 +442,8 @@ function Gateway:access(conf)
     token_signing_alg_values_expected = conf.signing_algorithms,
     ssl_verify = conf.ssl_verify and "yes" or "no",
   })
-  if type(claims) ~= "table" then
+  if err or type(claims) ~= "table" or type(claims.exp) ~= "number"
+    or claims.exp ~= claims.exp or claims.exp == math.huge or claims.exp <= ngx.time() then
     kong.log.warn("OIDC access-token validation failed: ", tostring(err))
     return respond(401, "invalid bearer token", {
       ["WWW-Authenticate"] = oauth_challenge(conf, "invalid_token"),
