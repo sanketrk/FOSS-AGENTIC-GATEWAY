@@ -12,9 +12,9 @@ services:
     routes:
       - name: mcp-streamable-http
         paths:
-          - "~^/mcp$"
-          - "~^/.well-known/oauth-protected-resource$"
-          - "~^/.well-known/oauth-protected-resource/mcp$"
+          - "~/mcp$"
+          - "~/.well-known/oauth-protected-resource$"
+          - "~/.well-known/oauth-protected-resource/mcp$"
         strip_path: false
         preserve_host: false
         request_buffering: false
@@ -53,8 +53,8 @@ services:
     routes:
       - name: mcp-server-a-http
         paths:
-          - "~^/mcp/server-a$"
-          - "~^/.well-known/oauth-protected-resource/mcp/server-a$"
+          - "~/mcp/server-a$"
+          - "~/.well-known/oauth-protected-resource/mcp/server-a$"
         strip_path: true
         path_handling: v0
         preserve_host: false
@@ -93,8 +93,8 @@ services:
     routes:
       - name: mcp-server-b-http
         paths:
-          - "~^/mcp/server-b$"
-          - "~^/.well-known/oauth-protected-resource/mcp/server-b$"
+          - "~/mcp/server-b$"
+          - "~/.well-known/oauth-protected-resource/mcp/server-b$"
         strip_path: true
         path_handling: v0
         preserve_host: false

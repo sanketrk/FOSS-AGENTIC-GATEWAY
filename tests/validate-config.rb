@@ -35,7 +35,7 @@ services.each do |service|
     seen_audiences[config.fetch("audience")] = true
     assert(config.fetch("metadata_paths").include?(metadata.path), "resource metadata URL must reach its handler")
     expected_paths = [resource.path] + config.fetch("metadata_paths")
-    assert(route.fetch("paths").sort == expected_paths.map { |path| "~^#{path}$" }.sort,
+    assert(route.fetch("paths").sort == expected_paths.map { |path| "~#{path}$" }.sort,
       "routes must match exactly their resource and metadata paths")
     expected_paths.each do |path|
       assert(!seen_paths[path], "path #{path} belongs to multiple services")
