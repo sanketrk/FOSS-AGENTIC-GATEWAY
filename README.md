@@ -10,6 +10,18 @@ FOSS-AGENTIC-GATEWAY is a place to solve those problems together. It provides an
 
 [Try it](examples/banking/README.md) · [Build with us](CONTRIBUTING.md) · [Propose a capability](https://github.com/sanketrk/FOSS-AGENTIC-GATEWAY/issues/new) · [Deploy it](docs/gateway/setup.md)
 
+## Bring AI gateway capabilities to the open-source community
+
+Kong OSS gives developers an extensible gateway foundation. Several capabilities needed for AI and agent workflows—including Kong's [AI MCP Proxy](https://developer.konghq.com/plugins/ai-mcp-proxy/), [AI A2A Proxy](https://developer.konghq.com/plugins/ai-a2a-proxy/), and [AI Proxy Advanced](https://developer.konghq.com/plugins/ai-proxy-advanced/)—require a commercial AI license. They are separate from the plugins available in Kong OSS.
+
+**That gap is the motivation for FOSS-AGENTIC-GATEWAY: build AI and agent gateway capabilities that the community can use, inspect, improve, and share as open source.**
+
+We are building independent Apache-2.0 plugins on Kong OSS. MCP, A2A, and token exchange are the starting point. Agent-to-agent observability, access policy, usage controls, discovery, and routing are opportunities to build together. When someone solves a shared problem here, other teams can reuse and extend that contribution.
+
+Kong has also published some AI plugin source, such as the [basic AI Proxy in its OSS repository](https://github.com/Kong/kong/tree/3.9.0/kong/plugins/ai-proxy). The gap described here concerns the commercially licensed capabilities above.
+
+[Build an open capability with us →](CONTRIBUTING.md)
+
 ## Why build here?
 
 A useful solution should be able to travel beyond the team that created it. An interoperability fix, an access policy, or a routing strategy can become a reusable plugin that helps other projects.
@@ -37,13 +49,11 @@ The aim is an open collection of useful gateway capabilities that grows through 
 
 A2A and token-exchange settings currently use deployment configuration. See the [supported profiles](docs/protocols/interoperability.md), [A2A guide](docs/protocols/a2a.md), and [SDK guide](sdk/python/README.md) for current limits.
 
-### And Kong's many plugins?
+### Use these plugins with Kong OSS
 
-Kong offers plugins you can use with Kong OSS and additional plugins that require a paid license. Its [OpenID Connect plugin](https://developer.konghq.com/plugins/openid-connect/) requires Kong Enterprise, and [AI Proxy Advanced](https://developer.konghq.com/plugins/ai-proxy-advanced/) requires an AI license.
+Our `mcp`, `a2a`, and `token-exchange` plugins are Apache-2.0 source available in this repository. They run on Kong OSS without a Kong Enterprise or AI license. The supplied image includes them alongside the OSS release's bundled plugins.
 
-**Our three project plugins are available to Kong OSS users as Apache-2.0 source in this repository.** The supplied gateway image includes them and the OSS release's bundled plugins. Compatible OSS plugins can be configured alongside them; check version support and how they interact. Each upstream plugin retains its own license.
-
-See the [Kong Plugin Hub](https://developer.konghq.com/plugins/) for upstream availability and our [contribution guide](CONTRIBUTING.md) for installing and extending project plugins.
+Compatible OSS plugins can be configured alongside them; check version support and how they interact. Each upstream plugin retains its own license. See the [Kong Plugin Hub](https://developer.konghq.com/plugins/) for upstream availability and our [contribution guide](CONTRIBUTING.md) for extending the gateway.
 
 ## Plugins make room for your next idea
 
