@@ -49,6 +49,10 @@ cd FOSS-AGENTIC-GATEWAY
 | OAuth token exchange | Optional MCP or A2A route plugin with a trusted STS and mounted credentials |
 | Control plane | Generic OIDC login and MCP registry; A2A/exchange administration is not yet in the UI |
 
+## Banking examples
+
+[Run the banking examples](examples/banking/README.md) to see an agent call another agent over A2A, call one MCP server, or combine results from multiple MCP servers. Each route exchanges its gateway token for a separate backend token. The local demo includes synthetic banking data, a disposable issuer/STS, verified TLS, and negative authorization checks.
+
 ## Features
 
 - Kong Gateway OSS 3.9 by default. Supports MCP Streamable HTTP revision `2026-07-28` and configurable legacy compatibility for `2025-11-25` and `2025-03-26`.

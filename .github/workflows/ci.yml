@@ -33,6 +33,8 @@ jobs:
           sh -n tests/smoke.sh
           ruby tests/validate-config.rb
           ruby tests/validate-a2a.rb
+          ruby tests/validate-banking.rb
+          PYTHONPATH=examples/banking python3 -m unittest discover -s tests/banking -v
           ruby -ryaml -rjson - <<'RUBY'
           gateway = YAML.load_file("gateway/config/kong.yml")
           agents = YAML.load_file("examples/gateway/a2a.yml")
@@ -69,6 +71,7 @@ jobs:
               luajit /tests/a2a_spec.lua
               luajit /tests/authentication_exchange_spec.lua
               kong config parse /examples/gateway/a2a.yml >/dev/null
+              kong config parse /examples/banking/kong.yml >/dev/null
               kong config parse /tests/exchange-kong.json >/dev/null
               kong config parse /tests/a2a-exchange-kong.json >/dev/null
               kong config parse /etc/kong/kong.yml >/dev/null
@@ -94,3 +97,12 @@ jobs:
           done
           docker logs foss-agentic-gateway-scc-test
           exit 1
+      - name: Exercise banking examples with real token exchange
+        env:
+          BANKING_GATEWAY_IMAGE: foss-agentic-gateway:ci
+        run: |
+          docker compose -f examples/banking/compose.yml build prepare
+          trap 'docker compose -f examples/banking/compose.yml down -v >/dev/null 2>&1 || true' EXIT
+          docker compose -f examples/banking/compose.yml run --rm prepare
+          docker compose -f examples/banking/compose.yml up -d --wait --wait-timeout 120 issuer review-agent accounts transactions gateway
+          docker compose -f examples/banking/compose.yml run --rm client client.py all

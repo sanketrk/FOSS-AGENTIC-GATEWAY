@@ -1,0 +1,121 @@
+name: banking-examples
+
+x-fixture: &fixture
+  image: foss-agentic-banking-fixtures:local
+  build:
+    context: .
+  user: "1001:0"
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
+x-backend-health: &backend-health
+  test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=2)"]
+  interval: 2s
+  timeout: 3s
+  retries: 30
+
+services:
+  prepare:
+    <<: *fixture
+    profiles: [tools]
+    user: "0:0"
+    command: [prepare.py]
+    network_mode: none
+    volumes:
+      - issuer-credentials:/runtime/issuer
+      - gateway-credentials:/runtime/gateway
+      - backend-credentials:/runtime/backend
+      - agent-credentials:/runtime/client
+
+  issuer:
+    <<: *fixture
+    command: [serve.py]
+    environment:
+      DEMO_SERVICE: issuer
+    volumes: ["issuer-credentials:/credentials:ro"]
+    networks: [agents, backends]
+    healthcheck:
+      test: [CMD, python, -c, "import ssl, urllib.request; urllib.request.urlopen('https://localhost:8443/healthz', context=ssl.create_default_context(cafile='/credentials/ca.pem'), timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  review-agent:
+    <<: *fixture
+    command: [serve.py]
+    environment:
+      DEMO_SERVICE: review
+    volumes: ["backend-credentials:/credentials:ro"]
+    networks: [backends]
+    healthcheck: *backend-health
+
+  accounts:
+    <<: *fixture
+    command: [serve.py]
+    environment:
+      DEMO_SERVICE: accounts
+    volumes: ["backend-credentials:/credentials:ro"]
+    networks: [backends]
+    healthcheck: *backend-health
+
+  transactions:
+    <<: *fixture
+    command: [serve.py]
+    environment:
+      DEMO_SERVICE: transactions
+    volumes: ["backend-credentials:/credentials:ro"]
+    networks: [backends]
+    healthcheck: *backend-health
+
+  gateway:
+    image: ${BANKING_GATEWAY_IMAGE:-foss-agentic-gateway:banking}
+    build:
+      context: ../..
+      dockerfile: gateway/Dockerfile
+    user: "1001:0"
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    environment:
+      KONG_PROXY_LISTEN: 0.0.0.0:8443 ssl
+      KONG_SSL_CERT: /credentials/tls.pem
+      KONG_SSL_CERT_KEY: /credentials/tls.key
+      KONG_LUA_SSL_TRUSTED_CERTIFICATE: /credentials/ca.pem
+    volumes:
+      - ./kong.yml:/etc/kong/kong.yml:ro
+      - gateway-credentials:/credentials:ro
+    ports: ["127.0.0.1:8443:8443"]
+    networks: [agents, backends]
+    depends_on:
+      issuer: {condition: service_healthy}
+      review-agent: {condition: service_healthy}
+      accounts: {condition: service_healthy}
+      transactions: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, kong, health]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  client:
+    <<: *fixture
+    profiles: [tools]
+    command: [client.py, all]
+    volumes: ["agent-credentials:/credentials:ro"]
+    networks: [agents]
+    depends_on:
+      gateway: {condition: service_healthy}
+
+networks:
+  agents:
+  backends:
+    internal: true
+
+volumes:
+  issuer-credentials:
+  gateway-credentials:
+  backend-credentials:
+  agent-credentials:

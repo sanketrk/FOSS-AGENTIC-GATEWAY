@@ -1,0 +1,128 @@
+_format_version: "3.0"
+_transform: true
+services:
+  - name: bank-review
+    url: http://review-agent:8080/rpc
+    retries: 0
+    connect_timeout: 5000
+    read_timeout: 3600000
+    write_timeout: 3600000
+    routes:
+      - name: bank-review
+        paths:
+          - "~/a2a/transaction-review$"
+          - "~/cards/transaction-review$"
+        strip_path: true
+        path_handling: v0
+        request_buffering: false
+        response_buffering: false
+        plugins:
+          - name: a2a
+            config:
+              rpc_path: /a2a/transaction-review
+              card_path: /cards/transaction-review
+              upstream_card_path: /.well-known/agent-card.json
+              public_card: true
+              protocol_versions: ["1.0"]
+              audience: https://gateway:8443/a2a/transaction-review
+              authorization_servers:
+                - issuer: https://issuer:8443
+                  discovery_url: https://issuer:8443/.well-known/oauth-authorization-server
+              signing_algorithms: ["RS256"]
+              required_scopes: ["a2a:review"]
+              allowed_origins: []
+              forward_bearer_token: false
+          - name: token-exchange
+            config:
+              token_endpoint: https://issuer:8443/token
+              gateway_audience: https://gateway:8443/a2a/transaction-review
+              resource: urn:bank:backend:transaction-review
+              client_id: banking-gateway
+              client_secret_file: /credentials/exchange-secret
+              client_auth_method: client_secret_basic
+              scopes: ["review:execute"]
+              timeout_ms: 3000
+  - name: bank-accounts
+    url: http://accounts:8080/mcp
+    retries: 0
+    connect_timeout: 5000
+    read_timeout: 3600000
+    write_timeout: 3600000
+    routes:
+      - name: bank-accounts
+        paths:
+          - "~/mcp/accounts$"
+          - "~/\\.well-known/oauth-protected-resource/mcp/accounts$"
+        strip_path: true
+        path_handling: v0
+        request_buffering: false
+        response_buffering: false
+        plugins:
+          - name: mcp
+            config:
+              resource_url: https://gateway:8443/mcp/accounts
+              resource_metadata_url: https://gateway:8443/.well-known/oauth-protected-resource/mcp/accounts
+              metadata_paths: [/.well-known/oauth-protected-resource/mcp/accounts]
+              legacy_protocol_versions: ["2025-11-25"]
+              scopes_supported: ["accounts:read"]
+              ssl_verify: true
+              audience: https://gateway:8443/mcp/accounts
+              authorization_servers:
+                - issuer: https://issuer:8443
+                  discovery_url: https://issuer:8443/.well-known/oauth-authorization-server
+              signing_algorithms: ["RS256"]
+              required_scopes: ["accounts:read"]
+              allowed_origins: []
+              forward_bearer_token: false
+          - name: token-exchange
+            config:
+              token_endpoint: https://issuer:8443/token
+              gateway_audience: https://gateway:8443/mcp/accounts
+              resource: urn:bank:backend:accounts
+              client_id: banking-gateway
+              client_secret_file: /credentials/exchange-secret
+              client_auth_method: client_secret_basic
+              scopes: ["accounts:summary"]
+              timeout_ms: 3000
+  - name: bank-transactions
+    url: http://transactions:8080/mcp
+    retries: 0
+    connect_timeout: 5000
+    read_timeout: 3600000
+    write_timeout: 3600000
+    routes:
+      - name: bank-transactions
+        paths:
+          - "~/mcp/transactions$"
+          - "~/\\.well-known/oauth-protected-resource/mcp/transactions$"
+        strip_path: true
+        path_handling: v0
+        request_buffering: false
+        response_buffering: false
+        plugins:
+          - name: mcp
+            config:
+              resource_url: https://gateway:8443/mcp/transactions
+              resource_metadata_url: https://gateway:8443/.well-known/oauth-protected-resource/mcp/transactions
+              metadata_paths: [/.well-known/oauth-protected-resource/mcp/transactions]
+              legacy_protocol_versions: ["2025-11-25"]
+              scopes_supported: ["transactions:read"]
+              ssl_verify: true
+              audience: https://gateway:8443/mcp/transactions
+              authorization_servers:
+                - issuer: https://issuer:8443
+                  discovery_url: https://issuer:8443/.well-known/oauth-authorization-server
+              signing_algorithms: ["RS256"]
+              required_scopes: ["transactions:read"]
+              allowed_origins: []
+              forward_bearer_token: false
+          - name: token-exchange
+            config:
+              token_endpoint: https://issuer:8443/token
+              gateway_audience: https://gateway:8443/mcp/transactions
+              resource: urn:bank:backend:transactions
+              client_id: banking-gateway
+              client_secret_file: /credentials/exchange-secret
+              client_auth_method: client_secret_basic
+              scopes: ["transactions:recent"]
+              timeout_ms: 3000
