@@ -6,11 +6,11 @@ USER root
 RUN luarocks --lua-version=5.1 install --deps-mode=none \
     https://luarocks.org/lua-resty-openidc-1.8.0-1.src.rock
 
-COPY kong/plugins/mcp-gateway /usr/local/share/lua/5.1/kong/plugins/mcp-gateway
-COPY kong/plugins/mcp-token-exchange /usr/local/share/lua/5.1/kong/plugins/mcp-token-exchange
-COPY kong/plugins/a2a-gateway /usr/local/share/lua/5.1/kong/plugins/a2a-gateway
-COPY kong/kong.yml /etc/kong/kong.yml
-COPY kong/nginx-extra.conf /etc/kong/nginx-extra.conf
+COPY gateway/plugins/mcp-gateway /usr/local/share/lua/5.1/kong/plugins/mcp-gateway
+COPY gateway/plugins/mcp-token-exchange /usr/local/share/lua/5.1/kong/plugins/mcp-token-exchange
+COPY gateway/plugins/a2a-gateway /usr/local/share/lua/5.1/kong/plugins/a2a-gateway
+COPY gateway/config/kong.yml /etc/kong/kong.yml
+COPY gateway/config/nginx-extra.conf /etc/kong/nginx-extra.conf
 
 ENV KONG_DATABASE=off \
     KONG_DECLARATIVE_CONFIG=/etc/kong/kong.yml \

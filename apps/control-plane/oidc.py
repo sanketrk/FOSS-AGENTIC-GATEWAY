@@ -58,7 +58,7 @@ def claim_at_pointer(claims, pointer):
 
 class OIDCClient:
     def __init__(self, issuer, client_id, client_secret, audience, origin,
-                 admin_claim="/roles", admin_value="mcp-admin", admin_claim_source="id_token",
+                 admin_claim="/roles", admin_value="agentic-admin", admin_claim_source="id_token",
                  scopes=("openid", "profile", "email"), token_auth_method="client_secret_basic",
                  authorization_params=None, discovery_url=None, resource=None,
                  signing_algorithms=("RS256",), session_seconds=900):
@@ -94,8 +94,8 @@ class OIDCClient:
             raise ValueError("OIDC_AUTHORIZATION_PARAMS must be a string map without reserved OIDC fields")
         self.session_seconds = max(60, min(int(session_seconds), 3600))
         self.secure = self.origin.startswith("https://")
-        self.session_cookie = "__Host-mcp-session" if self.secure else "mcp-session"
-        self.login_cookie = "__Host-mcp-login" if self.secure else "mcp-login"
+        self.session_cookie = "__Host-agentic-session" if self.secure else "agentic-session"
+        self.login_cookie = "__Host-agentic-login" if self.secure else "agentic-login"
         self.lock = threading.RLock()
         self.pending, self.sessions = {}, {}
         self.metadata = None

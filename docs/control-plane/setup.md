@@ -1,6 +1,6 @@
-# Lightweight control plane
+# FOSS-AGENTIC-GATEWAY control plane
 
-A separate administrator service provides a persistent MCP server registry, authenticated JSON API, and browser UI. Python and SQLite keep it small; PyJWT and cryptography verify signed tokens. Agents connect to the gateway, not this administrator service.
+The FOSS-AGENTIC-GATEWAY administrator service provides a persistent MCP server registry, authenticated JSON API, and browser UI. Python and SQLite keep it small; PyJWT and cryptography verify signed tokens. Agents connect to the gateway, not this administrator service. The current UI/API manages MCP registrations; A2A and exchange policies are configured separately in gateway deployment files.
 
 ## OIDC login
 
@@ -8,7 +8,7 @@ OIDC is the default authentication mode. Configure a trusted issuer, register a 
 
 The login flow uses PKCE S256, state bound to an HttpOnly cookie, nonce, and exact issuer/client-audience checks. Signing algorithms are explicitly allowed; symmetric algorithms and unsigned tokens are rejected. Token endpoint authentication supports `client_secret_basic` (default), `client_secret_post`, and public clients with `none` plus PKCE. The callback validates a returned `iss` parameter, requiring it when the issuer advertises support. TLS certificate verification stays enabled.
 
-Administrator authorization is a deployment policy, **not a standard OIDC role claim**. Configure an exact claim/value that your issuer controls. By default `/roles` in the verified ID token must contain `mcp-admin`. RFC 6901 JSON pointers support nested claims such as `/realm_access/roles` or namespaced claims such as `/https:~1~1claims.example.com~1roles`. The claim must be a matching string or contain the configured value in an array. Requested scopes alone do not grant administrator access. Ensure users cannot assign themselves the authorization claim through editable profile data.
+Administrator authorization is a deployment policy, **not a standard OIDC role claim**. Configure an exact claim/value that your issuer controls. By default `/roles` in the verified ID token must contain `agentic-admin`. RFC 6901 JSON pointers support nested claims such as `/realm_access/roles` or namespaced claims such as `/https:~1~1claims.example.com~1roles`. The claim must be a matching string or contain the configured value in an array. Requested scopes alone do not grant administrator access. Ensure users cannot assign themselves the authorization claim through editable profile data.
 
 The default ID-token policy does not require JWT access tokens or an API audience: opaque access tokens from the token endpoint are supported for interactive login. An alternative `access_token` claim policy verifies a signed JWT against `OIDC_API_AUDIENCE` and binds its subject to the ID token. Bearer API automation also requires this configured audience and a JWT carrying the administrator claim. Opaque API tokens/introspection, encrypted ID tokens, client assertions, and refresh-token flows are outside the implemented profile.
 
@@ -21,24 +21,24 @@ Logout always clears the local session. When discovery advertises `end_session_e
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python3 -m pip install -r control-plane/requirements.txt
-test -f control-plane/.env || cp control-plane/.env.example control-plane/.env
+python3 -m pip install -r apps/control-plane/requirements.txt
+test -f apps/control-plane/.env || cp apps/control-plane/.env.example apps/control-plane/.env
 ```
 
 Edit the ignored `.env` with your issuer/client settings and administrator claim policy. Register `http://127.0.0.1:8080/auth/callback` as the client callback and `http://127.0.0.1:8080/` as the post-logout redirect.
 
-For Auth0, complete the [provider setup guide](AUTH0.md#tenant-setup), including its API audience, the web application's **User-delegated Access** grant, and your login user's administrator role. The generic default `/roles` policy differs from that guide's `/permissions` access-token policy; use the complete settings from the provider guide. Start the service:
+For Auth0, complete the [provider setup guide](../providers/auth0.md#tenant-setup), including its API audience, the web application's **User-delegated Access** grant, and your login user's administrator role. The generic default `/roles` policy differs from that guide's `/permissions` access-token policy; use the complete settings from the provider guide. Start the service:
 
 ```sh
 set -a
-. control-plane/.env
+. apps/control-plane/.env
 set +a
-python3 control-plane/app.py
+python3 apps/control-plane/app.py
 ```
 
 Open http://127.0.0.1:8080 and sign in with your identity provider. Remote deployments must use an HTTPS public URL. The configured URL determines callback URLs and Secure cookie behavior; untrusted forwarded headers do not override it.
 
-Keep the process running and restart it after editing environment settings. `CONTROL_PLANE_PUBLIC_URL` identifies this browser UI; `GATEWAY_PUBLIC_URL` identifies the separate MCP API origin, without `/mcp`. A local control plane can manage registrations for an OpenShift-hosted gateway. Registry publication to the cluster requires the publisher configuration described below; setting the gateway URL alone does not enable it. For callback/provider failures, see [login troubleshooting](AUTH0.md#troubleshooting-login).
+Keep the process running and restart it after editing environment settings. `CONTROL_PLANE_PUBLIC_URL` identifies this browser UI; `GATEWAY_PUBLIC_URL` identifies the separate MCP API origin, without `/mcp`. A local control plane can manage registrations for an OpenShift-hosted gateway. Registry publication to the cluster requires the publisher configuration described below; setting the gateway URL alone does not enable it. For callback/provider failures, see [login troubleshooting](../providers/auth0.md#troubleshooting-login).
 
 | Setting | Purpose |
 | --- | --- |
@@ -55,8 +55,10 @@ Keep the process running and restart it after editing environment settings. `CON
 | `OIDC_AUTHORIZATION_PARAMS` | Optional JSON map of provider extension parameters; cannot override reserved OIDC fields |
 | `CONTROL_PLANE_PUBLIC_URL` | Public control-plane origin, distinct from MCP resources |
 | `GATEWAY_PUBLIC_URL` | Public gateway origin used for registered MCP resources |
+| `PUBLISH_NAMESPACE` | Optional Kubernetes namespace enabling publication |
+| `PUBLISH_CONFIGMAP`, `PUBLISH_DEPLOYMENT` | Publication targets; default to `foss-agentic-gateway-kong` and `foss-agentic-gateway` |
 
-[Auth0](AUTH0.md) is an optional provider configuration example using this same generic client. It is not a built-in dependency. For explicit local development only, `AUTH_MODE=token` retains the shared-token mode with a strong `CONTROL_PLANE_TOKEN`; there is no automatic fallback in OIDC mode.
+[Auth0](../providers/auth0.md) is an optional provider configuration example using this same generic client. It is not a built-in dependency. For explicit local development only, `AUTH_MODE=token` retains the shared-token mode with a strong `CONTROL_PLANE_TOKEN`; there is no automatic fallback in OIDC mode.
 
 ## Server registration and publication
 
@@ -98,22 +100,22 @@ All `/api/*` routes require a browser session or a signed JWT bearer access toke
 Build/push the images and set their references, `GATEWAY_PUBLIC_URL`, `CONTROL_PLANE_PUBLIC_URL`, and the administrator policy in the manifests. Register the corresponding HTTPS callback and post-logout redirect at your issuer. Load credentials into a Secret:
 
 ```sh
-docker build -t mcp-control-plane:latest control-plane
-oc create secret generic mcp-control-plane-oidc \
+docker build -t foss-agentic-control-plane:latest apps/control-plane
+oc create secret generic foss-agentic-control-plane-oidc \
   --from-literal=issuer="$OIDC_ISSUER" \
   --from-literal=client-id="$OIDC_CLIENT_ID" \
   --from-literal=client-secret="$OIDC_CLIENT_SECRET"
-oc apply -k deploy/control-plane
+oc apply -k deploy/openshift/control-plane
 ```
 
 The control plane runs as one replica with a persistent SQLite volume and Recreate strategy. OpenShift supplies its runtime UID. Its dedicated service account can get/patch only the named gateway ConfigMap and Deployment. Kong pods have no service-account token or Admin API listener. The overlay creates no public Route; expose the UI through your private administrator TLS ingress.
 
-Publication updates the ConfigMap and requests a rolling restart through a Deployment annotation. Success means **rollout requested**, not completed. Verify `oc rollout status deployment/mcp-gateway` and authenticated calls before treating a revision as live. Replicas may temporarily run different policies. The two writes are not atomic: after partial failure, inspect cluster state and retry the reviewed revision. Empty registries cannot be published. Do not deploy multiple SQLite writers or concurrently manage this ConfigMap with static manifests/GitOps. Back up the database and exported configuration. Automatic rollback and live backend/issuer availability checks are not implemented.
+Publication updates the ConfigMap and requests a rolling restart through a Deployment annotation. Success means **rollout requested**, not completed. Verify `oc rollout status deployment/foss-agentic-gateway` and authenticated calls before treating a revision as live. Replicas may temporarily run different policies. The two writes are not atomic: after partial failure, inspect cluster state and retry the reviewed revision. Empty registries cannot be published. Do not deploy multiple SQLite writers or concurrently manage this ConfigMap with static manifests/GitOps. Back up the database and exported configuration. Automatic rollback and live backend/issuer availability checks are not implemented.
 
 ## Verification
 
 ```sh
-python3 -m unittest discover -s control-plane -v
+PYTHONPATH=apps/control-plane python3 -m unittest discover -s tests/control-plane -v
 ```
 
-CI verifies generic issuer discovery, token authentication methods, signed-token rejection, authorization claims, opaque browser access tokens, CSRF/session security, container hardening, generated Kong configuration, and routing. These checks cover the documented profile; they are not OpenID certification or a complete MCP server conformance suite. See [the interoperability profile](../docs/INTEROPERABILITY.md).
+CI verifies generic issuer discovery, token authentication methods, signed-token rejection, authorization claims, opaque browser access tokens, CSRF/session security, container hardening, generated Kong configuration, and routing. These checks cover the documented profile; they are not OpenID certification or a complete MCP server conformance suite. See [the interoperability profile](../protocols/interoperability.md).

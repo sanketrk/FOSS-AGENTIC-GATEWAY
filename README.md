@@ -1,14 +1,44 @@
-# OSS MCP Gateway
+# FOSS-AGENTIC-GATEWAY
 
-An Apache-2.0-licensed HTTP gateway built on Kong Gateway OSS and OpenResty. It reverse-proxies MCP Streamable HTTP traffic, verifies OIDC-discovered JWT access tokens, and includes an OpenShift arbitrary-UID deployment.
+FOSS-AGENTIC-GATEWAY is a free and open-source gateway for agentic connectivity, built on Kong Gateway OSS and OpenResty under Apache-2.0. It provides MCP transport policies, optional A2A JSON-RPC routing, OAuth token exchange, and an OIDC administrator control plane. Identity providers and upstream agents are configurable.
 
-This is a **transport-aware gateway, not a complete MCP server or protocol implementation**. The upstream MCP server must implement MCP methods, results, subscriptions, cancellation, session lifecycle, and any negotiated extensions. The gateway streams upstream SSE responses without buffering and passes through ordinary response headers/body. It validates the current request metadata and legacy JSON-RPC transport envelope, but does not validate all MCP method schemas or response semantics.
+The plugins enforce transport and authentication policies. Upstream MCP servers and A2A agents implement application protocol semantics. The upstream MCP server must implement MCP methods, results, subscriptions, cancellation, session lifecycle, and any negotiated extensions. The gateway streams upstream SSE responses without buffering and passes through ordinary response headers/body. It validates the current request metadata and legacy JSON-RPC transport envelope, but does not validate all MCP method schemas or response semantics.
 
-The control-plane authentication and MCP OAuth interfaces use provider-neutral configuration. See the [interoperability profile](docs/INTEROPERABILITY.md) for supported standards, tested behavior, deployment requirements, and limitations. Auth0 is an optional configuration example, not a required provider.
+The control-plane authentication and MCP OAuth interfaces use provider-neutral configuration. See the [interoperability profile](docs/protocols/interoperability.md) for supported standards, tested behavior, deployment requirements, and limitations. Auth0 is an optional configuration example, not a required provider.
 
-An optional [RFC 8693 token-exchange plugin](docs/TOKEN_EXCHANGE.md) exchanges verified gateway access tokens for separate upstream resource tokens. Enable it per route with a trusted STS and mounted client credentials.
+An optional [RFC 8693 token-exchange plugin](docs/plugins/token-exchange.md) exchanges verified gateway access tokens for separate upstream resource tokens. Enable it per route with a trusted STS and mounted client credentials.
 
-An optional [A2A gateway plugin](docs/A2A.md) proxies Agent2Agent JSON-RPC HTTP traffic, Agent Cards, and SSE using separate routes and JWT policies. Its transport profiles cover 1.0 and legacy 0.3.
+An optional [A2A gateway plugin](docs/protocols/a2a.md) proxies Agent2Agent JSON-RPC HTTP traffic, Agent Cards, and SSE using separate routes and JWT policies. Its transport profiles cover 1.0 and legacy 0.3.
+
+## Project layout
+
+```text
+apps/control-plane/             OIDC administrator API, UI, and local configuration
+gateway/                       Gateway container, configuration, and Lua plugins
+  config/                       Default Kong and OpenResty configuration
+  plugins/                      MCP, A2A, and token-exchange plugins
+deploy/openshift/
+ gateway/                      Base gateway manifests
+  control-plane/                Optional control-plane overlay
+docs/                          Setup, providers, protocols, plugins, and migration
+examples/gateway/              Optional gateway configurations
+tests/control-plane/           Python control-plane tests
+tests/                         Gateway and deployment checks
+```
+
+See the [documentation index](docs/README.md) and [migration guide](docs/migration/project-rename.md). Clone this repository with:
+
+```sh
+git clone https://github.com/sanketrk/FOSS-AGENTIC-GATEWAY.git
+cd FOSS-AGENTIC-GATEWAY
+```
+
+| Component | Configuration and administration |
+| --- | --- |
+| MCP gateway | Default routes or control-plane registry publication |
+| A2A JSON-RPC gateway | Optional route configuration; upstream agents implement task semantics |
+| OAuth token exchange | Optional MCP route plugin with a trusted STS and mounted credentials |
+| Control plane | Generic OIDC login and MCP registry; A2A/exchange administration is not yet in the UI |
 
 ## Features
 
@@ -33,7 +63,7 @@ Agents connect to one public gateway host and select a registered server endpoin
 | `/mcp/server-a` | `mcp-server-a:3000/mcp` | `https://mcp.example.com/mcp/server-a` | `mcp:server-a:access` |
 | `/mcp/server-b` | `mcp-server-b:3000/mcp` | `https://mcp.example.com/mcp/server-b` | `mcp:server-b:access` |
 
-These are generic placeholders. The `services` list in `kong/kong.yml` is the declarative server registry. Add a service and route for each actual MCP server, with its upstream URL and independent plugin configuration. Update the embedded configuration in `deploy/openshift/kong-config.yaml` to match; validation checks both copies. For file-managed deployments, registry changes require a controlled configuration rollout. The optional [control plane](control-plane/README.md) adds an authenticated registration API, browser UI, SQLite persistence, and explicit publish workflow.
+These are generic placeholders. The `services` list in `gateway/config/kong.yml` is the declarative server registry. Add a service and route for each actual MCP server, with its upstream URL and independent plugin configuration. Update the embedded configuration in `deploy/openshift/gateway/kong-config.yaml` to match; validation checks both copies. For file-managed deployments, registry changes require a controlled configuration rollout. The optional [control plane](docs/control-plane/setup.md) adds an authenticated registration API, browser UI, SQLite persistence, and explicit publish workflow.
 
 Configure agents with the public endpoint(s) they may access, never the backend URL. The authorization server must issue access tokens bound to the endpoint's public resource URI and scopes. MCP clients send the standard RFC 8707 `resource` parameter in authorization and token requests. A token for server A is rejected at server B unless it explicitly satisfies server B's policy. Policies govern access to a whole server; tool-level authorization remains the upstream's responsibility.
 
@@ -49,18 +79,18 @@ To smoke-test a named server with a correctly scoped token:
 GATEWAY_URL=https://mcp.company.com \
 MCP_PATH=/mcp/server-a \
 ACCESS_TOKEN="$ACCESS_TOKEN" \
-sh tests/smoke.sh
+shtests/smoke.sh
 ```
 
 ## Registration API and control plane UI
 
-The optional [lightweight control plane](control-plane/README.md) lets administrators register, edit, and remove MCP servers, review a generated gateway configuration, and publish it through an OpenShift rollout. Registration changes remain drafts until published. The control plane uses OIDC login with a configurable trusted administrator claim; agents still authenticate with their separate OAuth policies at the gateway. Kong's Admin API remains disabled.
+The optional [lightweight control plane](docs/control-plane/setup.md) lets administrators register, edit, and remove MCP servers, review a generated gateway configuration, and publish it through an OpenShift rollout. Registration changes remain drafts until published. The control plane uses OIDC login with a configurable trusted administrator claim; agents still authenticate with their separate OAuth policies at the gateway. Kong's Admin API remains disabled.
 
-Run it locally with Python or deploy the optional `deploy/control-plane` overlay. See its [setup, API, and publication documentation](control-plane/README.md) for instructions and rollout limitations.
+Run it locally with Python or deploy the optional `deploy/openshift/control-plane` overlay. See its [setup, API, and publication documentation](docs/control-plane/setup.md) for instructions and rollout limitations.
 
 ## Configure
 
-Before building or deploying, edit the declarative config in [kong/kong.yml](./kong/kong.yml) or the OpenShift ConfigMap in [deploy/openshift/kong-config.yaml](./deploy/openshift/kong-config.yaml):
+Before building or deploying, edit the declarative config in [gateway/config/kong.yml](./gateway/config/kong.yml) or the OpenShift ConfigMap in [deploy/openshift/gateway/kong-config.yaml](./deploy/openshift/gateway/kong-config.yaml):
 
 1. Set each upstream MCP server URL and its route-specific audience and scopes.
 2. Set `resource_url` and `resource_metadata_url` to the public HTTPS MCP URL and its path-specific Protected Resource Metadata URL. Set `metadata_paths` to both the path-specific and root well-known paths reachable through your ingress.
@@ -75,15 +105,15 @@ MCP clients discover the configured authorization servers through the gateway's 
 ## Build and run
 
 ```sh
-docker build --build-arg KONG_VERSION=3.9.0 -t mcp-gateway:latest .
+docker build --build-arg KONG_VERSION=3.9.0 -t foss-agentic-gateway:latest -f gateway/Dockerfile .
 ```
 
-The image installs `lua-resty-openidc` into the Kong/OpenResty Lua runtime. [kong/nginx-extra.conf](./kong/nginx-extra.conf) defines its `discovery`, `jwks`, and `jwt_verification` shared dictionaries, included by Kong's HTTP configuration. The OpenShift ConfigMap mounts both the declarative Kong config and the matching Nginx include. The Nginx client body limit is 10 MiB; raise it deliberately if the upstream accepts larger MCP requests.
+The image installs `lua-resty-openidc` into the Kong/OpenResty Lua runtime. [gateway/config/nginx-extra.conf](./gateway/config/nginx-extra.conf) defines its `discovery`, `jwks`, and `jwt_verification` shared dictionaries, included by Kong's HTTP configuration. The OpenShift ConfigMap mounts both the declarative Kong config and the matching Nginx include. The Nginx client body limit is 10 MiB; raise it deliberately if the upstream accepts larger MCP requests.
 
-For a local container, first edit `kong/kong.yml` with reachable upstream and OIDC values, then run:
+For a local container, first edit `gateway/config/kong.yml` with reachable upstream and OIDC values, then run:
 
 ```sh
-docker run --rm -p 8000:8000 -p 8100:8100 mcp-gateway:latest
+docker run --rm -p 8000:8000 -p 8100:8100 foss-agentic-gateway:latest
 ```
 
 The MCP endpoint is `http://localhost:8000/mcp`. The status listener is on port 8100 and is not exposed by the OpenShift Service. Provide a valid bearer JWT in the `Authorization` header. Configure a locally reachable upstream and OIDC issuer first.
@@ -92,10 +122,10 @@ Legacy session-aware upstreams must keep session state reachable for the lifetim
 
 ## Deploy to OpenShift
 
-Build and push the image to a registry accessible by the cluster, update `image` in [deploy/openshift/deployment.yaml](./deploy/openshift/deployment.yaml), and update the ConfigMap as above. Then apply:
+Build and push the image to a registry accessible by the cluster, update `image` in [deploy/openshift/gateway/deployment.yaml](./deploy/openshift/gateway/deployment.yaml), and update the ConfigMap as above. Then apply:
 
 ```sh
-oc apply -k deploy/openshift
+oc apply -k deploy/openshift/gateway
 ```
 
 Expose the ClusterIP Service through your platform's TLS-terminating ingress or an OpenShift Route configured for HTTPS. Configure external network egress for the OIDC issuer and internal network access to the MCP upstream. Set the ingress/Route idle timeout to accommodate the SSE duration needed by your clients. The Deployment runs with a read-only root filesystem, drops all Linux capabilities, disables privilege escalation, uses an ephemeral writable Kong prefix, and does not mount a service-account token. OpenShift assigns the runtime UID; no fixed UID or privileged port is required.
@@ -109,32 +139,35 @@ CRC runs a single-node OpenShift cluster for development/testing, not production
 ```sh
 eval "$(crc oc-env)"
 oc login -u developer https://api.crc.testing:6443
-oc project mcp-gateway
+oc project foss-agentic-gateway || oc new-project foss-agentic-gateway
 ```
 
 The CRC `developer` account's sample password is `developer`; `crc console --credentials` displays the local cluster credentials if needed. Create a binary Docker build configuration once, then build this checkout into the cluster's internal image registry:
 
 ```sh
-if ! oc get buildconfig mcp-gateway >/dev/null 2>&1; then
-  oc new-build --binary --strategy=docker --name=mcp-gateway --to=mcp-gateway:latest
+if ! oc get buildconfig foss-agentic-gateway >/dev/null 2>&1; then
+  oc new-build --binary --strategy=docker --name=foss-agentic-gateway --to=foss-agentic-gateway:latest
 fi
-oc start-build mcp-gateway --from-dir=. --follow
+oc patch buildconfig foss-agentic-gateway --type=merge \
+  -p '{"spec":{"strategy":{"dockerStrategy":{"dockerfilePath":"gateway/Dockerfile"}}}}'
+git archive --format=tar -o /tmp/foss-agentic-gateway-build.tar HEAD
+oc start-build foss-agentic-gateway --from-archive=/tmp/foss-agentic-gateway-build.tar --follow
 ```
 
 Deploy the manifests, select the image built above, and use one replica to fit CRC's single-node memory budget:
 
 ```sh
-oc apply -k deploy/openshift
-oc set image deployment/mcp-gateway \
-  gateway=image-registry.openshift-image-registry.svc:5000/mcp-gateway/mcp-gateway:latest
-oc scale deployment/mcp-gateway --replicas=1
-oc rollout status deployment/mcp-gateway --timeout=5m
+oc apply -k deploy/openshift/gateway
+oc set image deployment/foss-agentic-gateway \
+  gateway=image-registry.openshift-image-registry.svc:5000/foss-agentic-gateway/foss-agentic-gateway:latest
+oc scale deployment/foss-agentic-gateway --replicas=1
+oc rollout status deployment/foss-agentic-gateway --timeout=5m
 ```
 
 Forward the service from a second terminal, then check the public metadata endpoint:
 
 ```sh
-oc port-forward service/mcp-gateway 18000:8000
+oc port-forward service/foss-agentic-gateway 18000:8000
 ```
 
 ```sh
@@ -154,7 +187,7 @@ GATEWAY_URL=https://mcp.example.com \
 RESOURCE_URL=https://mcp.example.com/mcp \
 RESOURCE_METADATA_URL=https://mcp.example.com/.well-known/oauth-protected-resource/mcp \
 ACCESS_TOKEN="$ACCESS_TOKEN" \
-sh tests/smoke.sh
+shtests/smoke.sh
 ```
 
 The repository includes a Lua plugin test suite, config/hardening validation, and a CI workflow that builds the image, parses declarative config, runs plugin tests, launches Kong as an arbitrary UID with a read-only root filesystem, checks its status endpoint, and renders the OpenShift Kustomize resources.

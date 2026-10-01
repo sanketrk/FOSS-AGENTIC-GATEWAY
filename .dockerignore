@@ -1,7 +1,15 @@
 .git
 .github
+apps
 deploy
+docs
+examples
 tests
 README.md
 LICENSE
-control-plane
+**/.env
+**/.env.*
+**/*.sqlite3
+**/*.sqlite3-*
+**/__pycache__
+**/.venv

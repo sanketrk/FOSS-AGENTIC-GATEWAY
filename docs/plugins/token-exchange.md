@@ -1,4 +1,4 @@
-# Optional upstream token exchange
+# FOSS-AGENTIC-GATEWAY: token exchange
 
 The `mcp-token-exchange` Kong OSS plugin implements outbound [RFC 8693 token exchange](https://www.rfc-editor.org/rfc/rfc8693). Enable it on an MCP route alongside `mcp-gateway`. It is vendor neutral and inactive by default.
 
@@ -14,7 +14,7 @@ Add this entry to the same route's `plugins` array:
     token_endpoint: https://sts.example.com/oauth/token
     gateway_resource: https://mcp.example.com/mcp/server-a
     resource: https://backend.example.com/mcp
-    client_id: mcp-gateway-exchange
+    client_id: foss-agentic-gateway-exchange
     client_secret_file: /var/run/secrets/token-exchange/client-secret
     client_auth_method: client_secret_basic
     scopes:
@@ -28,10 +28,10 @@ The STS must support the standard token-exchange grant, accept the incoming subj
 
 ## Deployment and secrets
 
-The image and deployment enable `bundled,mcp-gateway,mcp-token-exchange`; only an explicit route entry activates exchange. Store credentials outside declarative configuration:
+The image and deployment enable `bundled,mcp-gateway,mcp-token-exchange,a2a-gateway`; only an explicit route entry activates exchange. Store credentials outside declarative configuration:
 
 ```sh
-oc create secret generic mcp-token-exchange --from-file=client-secret=/path/to/local/client-secret -n mcp-gateway
+oc create secret generic mcp-token-exchange --from-file=client-secret=/path/to/local/client-secret -n foss-agentic-gateway
 ```
 
 Add a read-only Secret volume to the gateway Deployment and mount it at `/var/run/secrets/token-exchange`. Ensure the arbitrary runtime UID can read the file. Apply route configuration and restart the gateway. The plugin rereads the mounted secret per exchange. Never put credentials in a ConfigMap or repository.

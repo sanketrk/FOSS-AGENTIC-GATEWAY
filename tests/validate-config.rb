@@ -1,11 +1,11 @@
 require "yaml"
 require "uri"
 
-kong = YAML.load_file("kong/kong.yml")
-openshift_config = YAML.load_file("deploy/openshift/kong-config.yaml")
-openshift_deployment = YAML.load_file("deploy/openshift/deployment.yaml")
-openshift_service = YAML.load_file("deploy/openshift/service.yaml")
-openshift_kustomization = YAML.load_file("deploy/openshift/kustomization.yaml")
+kong = YAML.load_file("gateway/config/kong.yml")
+openshift_config = YAML.load_file("deploy/openshift/gateway/kong-config.yaml")
+openshift_deployment = YAML.load_file("deploy/openshift/gateway/deployment.yaml")
+openshift_service = YAML.load_file("deploy/openshift/gateway/service.yaml")
+openshift_kustomization = YAML.load_file("deploy/openshift/gateway/kustomization.yaml")
 embedded_kong = YAML.load(openshift_config.fetch("data").fetch("kong.yml"))
 embedded_nginx = openshift_config.fetch("data").fetch("nginx-extra.conf")
 
@@ -13,7 +13,7 @@ def assert(condition, message)
   raise message unless condition
 end
 
-assert(kong == embedded_kong, "OpenShift embedded Kong config differs from kong/kong.yml")
+assert(kong == embedded_kong, "OpenShift embedded Kong config differs from gateway/config/kong.yml")
 services = kong.fetch("services")
 assert(services.length >= 3, "sample must include default and two named MCP services")
 seen_paths = {}
@@ -68,14 +68,14 @@ expected_dicts = [
   "lua_shared_dict jwks 5m;",
   "lua_shared_dict jwt_verification 5m;",
 ]
-nginx_file = File.read("kong/nginx-extra.conf")
+nginx_file = File.read("gateway/config/nginx-extra.conf")
 expected_dicts.each do |directive|
   assert(nginx_file.lines.map(&:strip).include?(directive), "missing Nginx shared-dictionary directive: #{directive}")
   assert(embedded_nginx.lines.map(&:strip).include?(directive), "OpenShift ConfigMap is missing: #{directive}")
 end
 
-dockerfile = File.read("Dockerfile")
-assert(dockerfile.include?("COPY kong/nginx-extra.conf /etc/kong/nginx-extra.conf"),
+dockerfile = File.read("gateway/Dockerfile")
+assert(dockerfile.include?("COPY gateway/config/nginx-extra.conf /etc/kong/nginx-extra.conf"),
   "container image must include the OpenID cache dictionaries")
 assert(dockerfile.include?("KONG_NGINX_HTTP_INCLUDE=/etc/kong/nginx-extra.conf"),
   "container image must load the OpenID cache dictionaries")

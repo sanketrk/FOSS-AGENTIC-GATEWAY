@@ -1,10 +1,10 @@
-# A2A gateway plugin
+# FOSS-AGENTIC-GATEWAY: A2A plugin
 
 The optional `a2a-gateway` Kong OSS plugin proxies the **JSON-RPC HTTP binding** of the [Agent2Agent protocol](https://a2a-protocol.org/latest/specification/), originally introduced by Google. It remains vendor neutral. It supports transport profiles `1.0` and legacy `0.3`; it is not a complete A2A agent, protocol translator, or certification claim. gRPC and HTTP+JSON/REST bindings are not implemented.
 
 ## Configuration
 
-[examples/a2a-kong.yml](../examples/a2a-kong.yml) contains an isolated example. Merge its service into your gateway configuration after replacing the upstream, public audience, issuer/discovery URL, and scope policy. Keep `retries: 0` to avoid repeating agent operations and both buffering flags false for SSE. The image and deployment enable the plugin; default MCP routes do not activate it. Do not attach `mcp-gateway` to an A2A route: these protocols have different transport rules.
+[examples/gateway/a2a.yml](../../examples/gateway/a2a.yml) contains an isolated example. Merge its service into your gateway configuration after replacing the upstream, public audience, issuer/discovery URL, and scope policy. Keep `retries: 0` to avoid repeating agent operations and both buffering flags false for SSE. The image and deployment enable the plugin; default MCP routes do not activate it. Do not attach `mcp-gateway` to an A2A route: these protocols have different transport rules.
 
 The example maps `/a2a/agent-a` to the backend `/rpc` endpoint. GET `/.well-known/agent-card.json` is proxied to the configured `upstream_card_path` on the same backend. Each additional agent needs a distinct RPC endpoint and card URL, or its own hostname. Only one agent can own the host-wide well-known card URL. Namespaced card URLs may be used through direct configuration or a catalog.
 

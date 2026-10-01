@@ -1,7 +1,0 @@
-__pycache__
-*.sqlite3*
-test_app.py
-.env
-.env.*
-test_oidc.py
-.venv

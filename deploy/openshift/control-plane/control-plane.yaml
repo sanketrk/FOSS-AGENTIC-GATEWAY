@@ -1,38 +1,38 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: mcp-control-plane
+  name: foss-agentic-control-plane
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: mcp-control-plane-publisher
+  name: foss-agentic-control-plane-publisher
 rules:
   - apiGroups: [""]
     resources: [configmaps]
-    resourceNames: [mcp-gateway-kong]
+    resourceNames: [foss-agentic-gateway-kong]
     verbs: [get, patch]
   - apiGroups: [apps]
     resources: [deployments]
-    resourceNames: [mcp-gateway]
+    resourceNames: [foss-agentic-gateway]
     verbs: [get, patch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: mcp-control-plane-publisher
+  name: foss-agentic-control-plane-publisher
 subjects:
   - kind: ServiceAccount
-    name: mcp-control-plane
+    name: foss-agentic-control-plane
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: mcp-control-plane-publisher
+  name: foss-agentic-control-plane-publisher
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: mcp-control-plane-data
+  name: foss-agentic-control-plane-data
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -42,27 +42,27 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mcp-control-plane
+  name: foss-agentic-control-plane
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: mcp-control-plane
+      app.kubernetes.io/name: foss-agentic-control-plane
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: mcp-control-plane
+        app.kubernetes.io/name: foss-agentic-control-plane
     spec:
-      serviceAccountName: mcp-control-plane
+      serviceAccountName: foss-agentic-control-plane
       securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: control-plane
-          image: mcp-control-plane:latest
+          image: foss-agentic-control-plane:latest
           ports:
             - name: http
               containerPort: 8080
@@ -72,28 +72,28 @@ spec:
             - name: OIDC_ISSUER
               valueFrom:
                 secretKeyRef:
-                  name: mcp-control-plane-oidc
+                  name: foss-agentic-control-plane-oidc
                   key: issuer
             - name: OIDC_CLIENT_ID
               valueFrom:
                 secretKeyRef:
-                  name: mcp-control-plane-oidc
+                  name: foss-agentic-control-plane-oidc
                   key: client-id
             - name: OIDC_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: mcp-control-plane-oidc
+                  name: foss-agentic-control-plane-oidc
                   key: client-secret
             - name: OIDC_ADMIN_CLAIM
               value: /roles
             - name: OIDC_ADMIN_VALUE
-              value: mcp-admin
+              value: agentic-admin
             - name: OIDC_ADMIN_CLAIM_SOURCE
               value: id_token
             - name: OIDC_TOKEN_AUTH_METHOD
               value: client_secret_basic
             - name: CONTROL_PLANE_PUBLIC_URL
-              value: https://control.mcp.example.com
+              value: https://control.agentic.example.com
             - name: GATEWAY_PUBLIC_URL
               value: https://mcp.example.com
             - name: PUBLISH_NAMESPACE
@@ -126,16 +126,16 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: mcp-control-plane-data
+            claimName: foss-agentic-control-plane-data
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: mcp-control-plane
+  name: foss-agentic-control-plane
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: mcp-control-plane
+    app.kubernetes.io/name: foss-agentic-control-plane
   ports:
     - name: http
       port: 8080

@@ -1,4 +1,4 @@
-name: Validate gateway
+name: Validate FOSS Agentic Gateway
 
 on:
   push:
@@ -14,10 +14,10 @@ jobs:
           version: v1.32.0
       - name: Validate repository configuration
         run: |
-          python3 -m pip install -r control-plane/requirements.txt
-          python3 -m unittest discover -s control-plane -v
-          PYTHONPATH=control-plane python3 -c 'import json; from app import generate, validate; from test_app import sample; open("tests/generated-kong.json", "w").write(json.dumps(generate([validate(sample())], "https://mcp.example.com")))'
-          PYTHONPATH=control-plane python3 - <<'PY'
+          python3 -m pip install -r apps/control-plane/requirements.txt
+          PYTHONPATH=apps/control-plane python3 -m unittest discover -s tests/control-plane -v
+          PYTHONPATH=apps/control-plane:tests/control-plane python3 -c 'import json; from app import generate, validate; from test_app import sample; open("tests/generated-kong.json", "w").write(json.dumps(generate([validate(sample())], "https://mcp.example.com")))'
+          PYTHONPATH=apps/control-plane:tests/control-plane python3 - <<'PY'
           import json
           from app import generate, validate
           from test_app import sample
@@ -28,32 +28,32 @@ jobs:
               "client_secret_file": "/var/run/secrets/token-exchange/client-secret", "scopes": ["tools:read"]}})
           with open("tests/exchange-kong.json", "w") as output: json.dump(config, output)
           PY
-          node --check control-plane/static/app.js
+          node --check apps/control-plane/static/app.js
           sh -n tests/smoke.sh
           ruby tests/validate-config.rb
           ruby tests/validate-a2a.rb
-          ruby -ryaml -rjson -e 'c = YAML.load_file("kong/kong.yml"); a = YAML.load_file("examples/a2a-kong.yml"); a["services"][0]["routes"][0]["plugins"][0]["config"]["public_card"] = false; c["services"].concat(a["services"]); File.write("tests/runtime-kong.json", JSON.generate(c))'
-          kubectl kustomize deploy/openshift > /tmp/mcp-gateway-rendered.yaml
-          ruby -e 'require "yaml"; docs = YAML.load_stream(File.read("/tmp/mcp-gateway-rendered.yaml")); abort "unexpected rendered resource count" unless docs.length == 3'
+          ruby -ryaml -rjson -e 'c = YAML.load_file("gateway/config/kong.yml"); a = YAML.load_file("examples/gateway/a2a.yml"); a["services"][0]["routes"][0]["plugins"][0]["config"]["public_card"] = false; c["services"].concat(a["services"]); File.write("tests/runtime-kong.json", JSON.generate(c))'
+          kubectl kustomize deploy/openshift/gateway > /tmp/foss-agentic-gateway-rendered.yaml
+          ruby -e 'require "yaml"; docs = YAML.load_stream(File.read("/tmp/foss-agentic-gateway-rendered.yaml")); abort "unexpected rendered resource count" unless docs.length == 3'
       - name: Validate optional control plane deployment
         run: |
-          kubectl kustomize deploy/control-plane > /tmp/mcp-control-plane-rendered.yaml
+          kubectl kustomize deploy/openshift/control-plane > /tmp/foss-agentic-control-plane-rendered.yaml
           ruby tests/validate-control-plane.rb
-          docker build --tag mcp-control-plane:ci control-plane
+          docker build --tag foss-agentic-control-plane:ci apps/control-plane
           docker run --rm --read-only --tmpfs /data:rw,nosuid,nodev,size=32m --env TMPDIR=/data --user 12345:0 \
-            --volume "$PWD/control-plane/test_app.py:/app/test_app.py:ro" \
-            --volume "$PWD/control-plane/test_oidc.py:/app/test_oidc.py:ro" mcp-control-plane:ci \
+            --volume "$PWD/tests/control-plane/test_app.py:/app/test_app.py:ro" \
+            --volume "$PWD/tests/control-plane/test_oidc.py:/app/test_oidc.py:ro" foss-agentic-control-plane:ci \
             python -m unittest -v test_app test_oidc
       - name: Build Kong OSS image
-        run: docker build --build-arg KONG_VERSION=3.9.0 --tag mcp-gateway:ci .
+        run: docker build --build-arg KONG_VERSION=3.9.0 --tag foss-agentic-gateway:ci -f gateway/Dockerfile .
       - name: Validate plugin, declarative config, and arbitrary-UID runtime
         run: |
           docker run --rm --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m \
-            --user 12345:0 --volume "$PWD/tests:/tests:ro" --volume "$PWD/examples:/examples:ro" --entrypoint /bin/sh mcp-gateway:ci -ec '
+            --user 12345:0 --volume "$PWD/tests:/tests:ro" --volume "$PWD/examples:/examples:ro" --entrypoint /bin/sh foss-agentic-gateway:ci -ec '
               luajit /tests/handler_spec.lua
               luajit /tests/token_exchange_spec.lua
               luajit /tests/a2a_spec.lua
-              kong config parse /examples/a2a-kong.yml >/dev/null
+              kong config parse /examples/gateway/a2a.yml >/dev/null
               kong config parse /tests/exchange-kong.json >/dev/null
               kong config parse /etc/kong/kong.yml >/dev/null
               kong config parse /tests/generated-kong.json >/dev/null
@@ -62,11 +62,11 @@ jobs:
             '
       - name: Start image with restricted filesystem and arbitrary UID
         run: |
-          docker run --detach --name mcp-gateway-scc-test --read-only \
+          docker run --detach --name foss-agentic-gateway-scc-test --read-only \
             --tmpfs /tmp:rw,nosuid,nodev,size=256m --user 12345:0 \
             --volume "$PWD/tests/runtime-kong.json:/etc/kong/kong.yml:ro" \
-            --publish 127.0.0.1:18100:8100 --publish 127.0.0.1:18000:8000 mcp-gateway:ci
-          trap 'docker rm -f mcp-gateway-scc-test >/dev/null 2>&1 || true' EXIT
+            --publish 127.0.0.1:18100:8100 --publish 127.0.0.1:18000:8000 foss-agentic-gateway:ci
+          trap 'docker rm -f foss-agentic-gateway-scc-test >/dev/null 2>&1 || true' EXIT
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:18100/status >/dev/null; then
               python3 tests/routing.py
@@ -75,5 +75,5 @@ jobs:
             fi
             sleep 2
           done
-          docker logs mcp-gateway-scc-test
+          docker logs foss-agentic-gateway-scc-test
           exit 1

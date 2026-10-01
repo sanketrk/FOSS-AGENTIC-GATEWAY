@@ -23,7 +23,7 @@ class OIDCTests(unittest.TestCase):
 
     def setUp(self):
         self.auth = OIDCClient('https://identity.example.com/realms/enterprise', 'client-id', 'private-secret',
-                              'https://mcp-control-plane', 'http://127.0.0.1:8080',
+                              'https://foss-agentic-control-plane', 'http://127.0.0.1:8080',
                               admin_claim='/entitlements', admin_value='control-plane:admin', admin_claim_source='access_token')
         self.auth.metadata = {'authorization_endpoint': self.auth.issuer + 'authorize',
                               'token_endpoint': self.auth.issuer + '/token',
@@ -116,7 +116,7 @@ class OIDCTests(unittest.TestCase):
     def test_secure_cookie_and_configuration(self):
         auth = OIDCClient('https://identity.example.com/', 'id', 'secret', 'api', 'https://control.company.com')
         cookie = auth.cookie(auth.session_cookie, 'opaque', 900)
-        for flag in ['__Host-mcp-session', 'Secure', 'HttpOnly', 'SameSite=Lax', 'Path=/']: self.assertIn(flag, cookie)
+        for flag in ['__Host-agentic-session', 'Secure', 'HttpOnly', 'SameSite=Lax', 'Path=/']: self.assertIn(flag, cookie)
         for origin in ['http://public.example', 'https://user:pass@example.com', 'https://example.com/path']:
             with self.subTest(origin=origin), self.assertRaises(ValueError):
                 OIDCClient('https://identity.example.com/', 'id', 'secret', 'api', origin)
@@ -164,12 +164,12 @@ class OIDCTests(unittest.TestCase):
     def test_default_profile_uses_id_claim_and_allows_opaque_access_token(self):
         self.auth.admin_claim_source = 'id_token'
         self.auth.admin_claim = '/realm_access/roles'
-        self.auth.admin_value = 'mcp-admin'
+        self.auth.admin_value = 'agentic-admin'
         query, headers = self.login()
         self.assertNotIn('audience', query)
         self.assertEqual(query['scope'], ['openid profile email'])
         self.auth.exchange = lambda code, verifier: {'id_token': self.token(self.auth.client_id,
-            nonce=query['nonce'][0], realm_access={'roles': ['mcp-admin']}),
+            nonce=query['nonce'][0], realm_access={'roles': ['agentic-admin']}),
             'access_token': 'opaque-token', 'token_type': 'Bearer'}
         identity, _ = self.auth.callback({'state': query['state'], 'code': ['code']}, headers)
         self.assertEqual(identity['sub'], 'user-admin')
@@ -178,11 +178,11 @@ class OIDCTests(unittest.TestCase):
 
     def test_json_pointer_namespaced_claim_and_no_scope_authorization(self):
         self.auth.admin_claim = '/https:~1~1claims.example.com~1roles'
-        self.auth.admin_value = 'mcp-admin'
-        self.auth.require_admin({'https://claims.example.com/roles': ['mcp-admin']})
-        with self.assertRaises(AuthError): self.auth.require_admin({'scope': 'mcp-admin'})
+        self.auth.admin_value = 'agentic-admin'
+        self.auth.require_admin({'https://claims.example.com/roles': ['agentic-admin']})
+        with self.assertRaises(AuthError): self.auth.require_admin({'scope': 'agentic-admin'})
         self.auth.admin_claim = '/groups/0/role'
-        self.auth.require_admin({'groups': [{'role': 'mcp-admin'}]})
+        self.auth.require_admin({'groups': [{'role': 'agentic-admin'}]})
 
     def test_discovery_supports_path_issuers_and_separate_endpoint_hosts(self):
         self.auth.metadata = None

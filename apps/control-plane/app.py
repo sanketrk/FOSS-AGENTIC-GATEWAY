@@ -1,4 +1,4 @@
-"""Small authenticated server registry and declarative Kong publisher (stdlib only)."""
+"""FOSS-AGENTIC-GATEWAY administrator registry and Kong publisher."""
 import hashlib
 import hmac
 import json
@@ -179,7 +179,7 @@ class Registry:
 
 class KubernetesPublisher:
     """Writes one ConfigMap and requests a rolling deployment; never calls Kong Admin API."""
-    def __init__(self, namespace, configmap="mcp-gateway-kong", deployment="mcp-gateway"):
+    def __init__(self, namespace, configmap="foss-agentic-gateway-kong", deployment="foss-agentic-gateway"):
         self.namespace, self.configmap, self.deployment = namespace, configmap, deployment
         self.base = "https://" + os.environ["KUBERNETES_SERVICE_HOST"] + ":" + os.environ.get("KUBERNETES_SERVICE_PORT_HTTPS", "443")
         self.account = Path("/var/run/secrets/kubernetes.io/serviceaccount")
@@ -202,8 +202,8 @@ class KubernetesPublisher:
         self.call(deployment)
         self.call(prefix, {"data": {"kong.yml": json.dumps(snapshot["config"], indent=2)}})
         self.call(deployment, {"spec": {"template": {"metadata": {"annotations": {
-            "mcp-gateway/config-revision": snapshot["revision"],
-            "mcp-gateway/publish-time": str(time.time()),
+            "foss-agentic-gateway/config-revision": snapshot["revision"],
+            "foss-agentic-gateway/publish-time": str(time.time()),
         }}}}})
         return {"state": "rollout_requested", "deployment": self.deployment}
 
@@ -335,7 +335,7 @@ def main():
             os.environ.get("OIDC_CLIENT_SECRET", ""), os.environ.get("OIDC_API_AUDIENCE") or None,
             os.environ.get("CONTROL_PLANE_PUBLIC_URL", ""),
             admin_claim=os.environ.get("OIDC_ADMIN_CLAIM", "/roles"),
-            admin_value=os.environ.get("OIDC_ADMIN_VALUE", "mcp-admin"),
+            admin_value=os.environ.get("OIDC_ADMIN_VALUE", "agentic-admin"),
             admin_claim_source=os.environ.get("OIDC_ADMIN_CLAIM_SOURCE", "id_token"),
             scopes=os.environ.get("OIDC_SCOPES", "openid profile email").split(),
             token_auth_method=os.environ.get("OIDC_TOKEN_AUTH_METHOD", "client_secret_basic"),
@@ -352,7 +352,9 @@ def main():
         raise SystemExit("AUTH_MODE must be oidc or token")
     database = os.environ.get("REGISTRY_DATABASE", "registry.sqlite3")
     namespace = os.environ.get("PUBLISH_NAMESPACE")
-    publisher = KubernetesPublisher(namespace) if namespace else None
+    publisher = KubernetesPublisher(namespace,
+        configmap=os.environ.get("PUBLISH_CONFIGMAP", "foss-agentic-gateway-kong"),
+        deployment=os.environ.get("PUBLISH_DEPLOYMENT", "foss-agentic-gateway")) if namespace else None
     registry = Registry(database, os.environ["GATEWAY_PUBLIC_URL"], publisher)
     server = ThreadingHTTPServer((os.environ.get("CONTROL_PLANE_HOST", "127.0.0.1"), int(os.environ.get("PORT", "8080"))), handler(registry, token=token, oidc=oidc))
     server.serve_forever()

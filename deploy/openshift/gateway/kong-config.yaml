@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: mcp-gateway-kong
+  name: foss-agentic-gateway-kong
   labels:
-    app.kubernetes.io/name: mcp-gateway
+    app.kubernetes.io/name: foss-agentic-gateway
 data:
   kong.yml: |
     _format_version: "3.0"

@@ -1,0 +1,13 @@
+# FOSS-AGENTIC-GATEWAY documentation
+
+| Guide | Contents |
+| --- | --- |
+| [Project overview](../README.md) | Scope, layout, build, deployment, and MCP smoke checks |
+| [Control-plane setup](control-plane/setup.md) | Generic OIDC, registry API/UI, and publication |
+| [Optional Auth0 setup](providers/auth0.md) | Application/API grants, roles, callbacks, and troubleshooting |
+| [Protocol interoperability](protocols/interoperability.md) | Implemented profiles and their limits |
+| [A2A plugin](protocols/a2a.md) | JSON-RPC transport, Agent Cards, authentication, and configuration |
+| [Token exchange](plugins/token-exchange.md) | RFC 8693 MCP upstream exchange and credential mounting |
+| [Project migration](migration/project-rename.md) | Repository, directory, deployment, and identity migration |
+
+The project contains protocol-specific plugins. The administrator control plane currently manages the MCP registry; A2A routes and token exchange remain deployment-managed features.
