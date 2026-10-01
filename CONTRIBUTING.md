@@ -19,7 +19,7 @@ For example, an observability proposal could link calls across two agents and an
 | Downstream credentials | [Token-exchange plugin](gateway/plugins/token-exchange/) |
 | Administrator workflows | [Control plane](apps/control-plane/) |
 | Application integration | [Python SDK](sdk/python/) |
-| Complete workflows | [Banking examples](examples/banking/) |
+| Runnable scenarios | [Banking examples](examples/banking/) |
 | Automated validation | [Tests](tests/) and [CI workflow](.github/workflows/ci.yml) |
 
 The three project plugins are Apache-2.0 source. They use Kong's plugin mechanism; see the [Kong custom-plugin documentation](https://developer.konghq.com/custom-plugins/) for the development API.

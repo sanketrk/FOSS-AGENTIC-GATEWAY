@@ -66,7 +66,7 @@ except AuthenticationError:
 return dispatch_application_request(claims)
 ```
 
-The verifier requires a signed JWT with the trusted issuer, backend audience, expiry, issued-at time, required backend scopes, and **`act.sub` equal to the configured gateway actor**. It rejects original gateway tokens, tokens for other backends, missing or incorrect actors, expired tokens, and invalid signatures. These checks use explicit exceptions and remain active with Python optimization enabled. There is no `require_exchange=False` switch.
+The verifier requires a signed JWT with the trusted issuer, backend audience, expiry, issued-at time, required backend scopes, and **`act.sub` equal to the configured gateway actor**. It rejects original gateway tokens, tokens for other backends, missing or incorrect actors, expired tokens, and invalid signatures. These checks use explicit exceptions and remain active with Python optimization enabled. There is no `require_exchange=False` switch. Required scopes are checked for presence; additional signed scopes are accepted. The trusted STS must issue only the permissions authorized for the target. This verifier does not impose a maximum scope set.
 
 The STS must issue the signed actor claim under its configured exchange policy. [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693#section-4.1) defines `act`; it does not require all exchanged tokens to include it. This SDK deliberately requires it for its exchange-only backend profile. An OAuth grant name is not cryptographic evidence encoded in a token. Enforcement trusts the issuer's signed audience/actor/scope claims and its issuance policy, not a caller-provided header or response receipt. Network access restrictions still belong to your deployment.
 

@@ -2,7 +2,7 @@
 
 Serves an A2A 1.0 Agent Card and synchronous `SendMessage` responses through JSON-RPC and HTTP+JSON/REST. `handler()` constructs the SDK `ExchangeTokenVerifier` for `urn:bank:backend:transaction-review` and scope `review:execute`. The HTTP adapter verifies the exchanged JWT and gateway actor before invoking `dispatch()`.
 
-Its private `/rpc` is mapped to `/a2a/transaction-review` at the gateway. Its public card is exposed at `/cards/transaction-review`. It runs with public signing keys only; it cannot mint tokens.
+Its private `/rpc` is mapped to `/a2a/transaction-review` at the gateway. REST `POST /a2a/transaction-review/rest/message:send` maps to its private `/message:send` endpoint. Its public card is exposed at `/cards/transaction-review`. It runs with public signing keys only; it cannot mint tokens.
 
 [review_agent.py](review_agent.py) contains the application. The folder has its own Dockerfile; build from the repository root using `docker build -f examples/banking/transaction-review-agent/Dockerfile .`.
 

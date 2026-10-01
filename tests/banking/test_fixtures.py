@@ -18,7 +18,7 @@ import jwt
 from banking_demo.config import (AGENT_ID, EXCHANGE_ID, ISSUER, POLICIES, ACCESS_TOKEN, EXCHANGE_GRANT)
 from foss_agentic_gateway import GatewayError, OAuthClientCredentials
 from banking_demo.prepare import prepare
-from banking_demo.issuer import handler as issuer_handler, public_key
+from banking_demo.issuer import handler as issuer_handler, public_key, issue
 from review_agent import handler as review_handler
 from accounts_server import handler as accounts_handler
 from transactions_server import handler as transactions_handler
@@ -96,6 +96,31 @@ class BankingFixtures(unittest.TestCase):
                 self.assertEqual(claims['sub'], AGENT_ID)
                 self.assertEqual(claims['act'], {'sub': EXCHANGE_ID})
                 self.assertEqual(claims['token_use'], 'upstream')
+
+    def test_exchange_limits_broad_subject_to_one_target_scope(self):
+        # This fixture signs a broad subject as the trusted issuer; production
+        # callers never receive the signing key. It is not an end-user login flow.
+        signing_key = (self.root / 'issuer' / 'signing.key').read_bytes()
+        verification_key = public_key(self.root / 'backend')
+        unrelated_scopes = [f'unrelated:{index}' for index in range(99)]
+        for name, policy in POLICIES.items():
+            with self.subTest(name=name):
+                broad_token = issue(signing_key, policy['audience'],
+                                    ' '.join([policy['gateway_scope'], *unrelated_scopes]))
+                original = jwt.decode(broad_token, verification_key, algorithms=['RS256'],
+                                      issuer=ISSUER, audience=policy['audience'])
+                self.assertEqual(len(original['scope'].split()), 100)
+                status, data = self.token_request(self.exchange_form(name, broad_token), EXCHANGE_ID)
+                self.assertEqual(status, 200)
+                exchanged = jwt.decode(data['access_token'], verification_key, algorithms=['RS256'],
+                                       issuer=ISSUER, audience=policy['resource'])
+                self.assertEqual(exchanged['scope'].split(), [policy['backend_scope']])
+                self.assertEqual(data['scope'], policy['backend_scope'])
+                self.assertEqual(exchanged['sub'], original['sub'])
+                self.assertEqual(exchanged['act']['sub'], EXCHANGE_ID)
+                unentitled = issue(signing_key, policy['audience'], ' '.join(unrelated_scopes))
+                status, _ = self.token_request(self.exchange_form(name, unentitled), EXCHANGE_ID)
+                self.assertEqual(status, 400)
 
     def test_sts_rejects_caller_credentials_cross_audience_and_expired_subject(self):
         token = self.gateway_token('accounts')

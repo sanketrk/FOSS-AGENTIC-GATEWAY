@@ -8,6 +8,8 @@ Run a banking orchestrator through FOSS-AGENTIC-GATEWAY in three ways:
 
 Every authenticated route uses the generic `token-exchange` plugin. The caller gets a gateway access token; the gateway validates it and requests a different backend token using the [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693) exchange grant. The caller never receives the exchanged token or the gateway's STS credentials.
 
+The orchestrator is a command-line A2A/MCP client; the review agent is the A2A server. The scenarios are independent: MCP results are not passed to the review agent, which returns a fixed summary.
+
 All account and transaction data is synthetic. The orchestrator and review agent are deterministic Python examples, with no LLM dependency. They make no payments and implement only the protocol methods used in these examples.
 
 ## What runs
@@ -30,6 +32,8 @@ The local OAuth issuer signs short-lived gateway JWTs and implements client cred
 | Review agent | `https://gateway:8443/a2a/transaction-review` | `a2a:review` | `urn:bank:backend:transaction-review` | `review:execute` |
 | Accounts MCP | `https://gateway:8443/mcp/accounts` | `accounts:read` | `urn:bank:backend:accounts` | `accounts:summary` |
 | Transactions MCP | `https://gateway:8443/mcp/transactions` | `transactions:read` | `urn:bank:backend:transactions` | `transactions:recent` |
+
+The demo uses an agent identity obtained through client credentials. Each normal gateway token already has one route-specific scope; exchange rebinds its audience and maps that scope to the target permission. There is no human login or user-entitlement directory in this fixture. A separate test supplies a signed synthetic subject token with 100 scopes and checks that the STS issues only the one configured target scope.
 
 The STS checks the gateway client, the subject token's issuer/signature/expiry/audience/scope, and the requested resource/scope against fixed policy. Its backend token preserves `sub=banking-orchestrator`, records `act.sub=banking-gateway`, and changes the audience and scope for the destination. Backends independently verify that token. The original gateway token is rejected by every backend.
 
@@ -57,6 +61,14 @@ The orchestrator fetches the public card at `/cards/transaction-review`, acquire
 
 The example uses the JSON-RPC and HTTP+JSON/REST bindings of [A2A 1.0](https://a2a-protocol.org/latest/specification/). Its card advertises the public gateway interface and Bearer JWT security. The card is anonymous and skips exchange; `SendMessage` is authenticated and exchanged. Streaming, task persistence, and push notifications are not part of this fixture.
 
+### A2A over REST
+
+```sh
+docker compose -f examples/banking/compose.yml run --rm banking-orchestrator a2a-rest
+```
+
+The card also advertises the REST base `/a2a/transaction-review/rest`. The SDK posts a plain `SendMessageRequest` to `/message:send` below that base; the gateway forwards it to the backend `/message:send`. The gateway audience and exchange policy are the same as JSON-RPC. The `all` command runs both bindings.
+
 ## 2. An agent calls one MCP server
 
 ```sh
@@ -75,7 +87,7 @@ docker compose -f examples/banking/compose.yml run --rm banking-orchestrator mcp
 
 The same orchestrator obtains a separate gateway token for each MCP audience, opens each server independently, and combines the account summary with three synthetic recent transactions. Each request is exchanged for that server's backend audience and scopes. An account token cannot be reused against the transactions endpoint.
 
-All successful responses include a demonstration `verified_upstream_identity` receipt. For accounts it looks like:
+Successful A2A `SendMessage` responses and MCP tool results include a demonstration `verified_upstream_identity` receipt. For accounts it looks like:
 
 ```json
 {
@@ -87,7 +99,7 @@ All successful responses include a demonstration `verified_upstream_identity` re
 }
 ```
 
-The receipt is fixture output after backend JWT verification, not an identity header inserted by the gateway. Bearer tokens and secrets are never printed.
+Agent Cards, initialization, notifications, and tool discovery do not include the receipt. The receipt is fixture output after backend JWT verification, not an identity header inserted by the gateway. Bearer tokens and secrets are never printed.
 
 ## Verify and stop
 
@@ -97,7 +109,7 @@ Run all scenarios:
 docker compose -f examples/banking/compose.yml run --rm banking-orchestrator all
 ```
 
-The responders mandate SDK verification before dispatch. CI integration tests assert that exchanged identities match each backend and that a wrong gateway audience is rejected. Fixture tests also verify that backends reject original gateway tokens and tokens for a different backend, and that the STS rejects expired subjects and expanded scopes. CI runs both these tests and this real Kong/Compose demo.
+The responders mandate SDK verification before dispatch. CI integration tests assert that exchanged identities match each backend and that a wrong gateway audience is rejected. Fixture tests also verify that broad subject scopes are reduced to one target scope, that a missing required caller scope blocks exchange, that backends reject original gateway tokens and tokens for a different backend, and that the STS rejects expired subjects and expanded scopes. CI runs both these tests and this real Kong/Compose demo.
 
 The backend services have no published ports and join only the internal `backends` network; the caller joins only `agents`. Backend HTTP is isolated to this local demo network. Use your deployment's authenticated encrypted backend transport and network controls when adapting the topology.
 
@@ -130,12 +142,10 @@ Each of the four application folders owns its code, README and Dockerfile. Each 
 | [Accounts server](accounts-mcp-server/README.md) | [accounts_server.py](accounts-mcp-server/accounts_server.py) | `ExchangeTokenVerifier` before MCP dispatch |
 | [Transactions server](transactions-mcp-server/README.md) | [transactions_server.py](transactions-mcp-server/transactions_server.py) | `ExchangeTokenVerifier` before MCP dispatch |
 
+The fixture STS issues exactly one backend scope per target. The SDK checks for required scopes and accepts additional signed scopes; narrow issuance remains the STS policy.
+
 The SDK client permits gateway-relative endpoints over verified HTTPS. Each backend requires a trusted signature, its own audience/scopes, and the signed gateway actor claim `act.sub=banking-gateway`. Original tokens and tokens lacking that actor are rejected before business logic. The gateway performs RFC 8693 exchange; the caller does not receive the gateway exchange credential. Receipts remain diagnostic output and are never used as security proof. See the [SDK exchange policy](../../sdk/python/README.md#backend-mandate-the-exchange-policy-before-dispatch) for the required STS actor configuration and initial protocol limits.
 
 To adapt the examples, configure an exchange-capable OAuth authorization server with separate agent and gateway clients, map gateway audiences/scopes to backend resources/scopes, and replace the fixtures with your actual A2A agent and MCP servers. Configure the gateway with the real HTTPS discovery/token endpoints and trusted CA bundle. The STS and backend must agree on subject/actor claims and enforce their own authorization policies; an OIDC login provider alone does not establish token-exchange support.
 
 These routes are managed through `kong.yml`. The current control-plane publisher generates MCP-only configurations and would remove the manually configured exchange policies and A2A route. Do not publish over this example using the registry UI.
-
-A2A 1.0 synchronous SendMessage is available through JSON-RPC and HTTP+JSON/REST. Select `binding="HTTP+JSON"` on the SDK A2A `Endpoint` and use the advertised REST base path; the token audience stays the agent gateway audience. Token exchange and backend verification are identical for both bindings.
-
-Run the REST banking scenario: `docker compose -f examples/banking/compose.yml run --rm banking-orchestrator a2a-rest`. The `all` scenario runs both bindings.

@@ -123,13 +123,15 @@ flowchart LR
     class identityService,calleeAgent target
 ```
 
-**The transaction-review agent receives only `review:execute` for its own audience.** Permissions for payments, customer administration, and unrelated services are excluded from that token. With the appropriate identity policy, the callee can also identify the original caller and the gateway acting for them.
+**With this issuance policy, the transaction-review agent receives only `review:execute` for its own audience.** Permissions for payments, customer administration, and unrelated services are excluded from that token. The identity service must enforce this scope limit. The backend SDK checks for required permissions; it does not reject additional signed scopes. With the appropriate identity policy, the callee can also identify the original caller and the gateway acting for them.
 
 The permission set must be relevant to the target and operation. Today, the plugin requests scopes configured for the selected route; the identity service must enforce the narrow issuance policy. Automatic selection of scopes from individual request content is a future policy extension. The [token-exchange guide](docs/plugins/token-exchange.md) covers setup and enforcement.
 
-## Try a complete banking workflow
+## Try the banking scenarios
 
-The examples contain **two agents and two MCP servers**. A banking orchestrator reads an account summary, retrieves recent transactions, and asks a transaction-review agent to summarize a purchase. Each target receives its own limited token.
+The examples contain **two agents and two MCP servers**. The orchestrator is a command-line A2A/MCP client; the review agent exposes an A2A server. Separate scenarios demonstrate account reads, transaction reads, and a fixed transaction-review response. The review agent does not consume the MCP results. Each target receives its own limited token.
+
+The runnable demo uses the calling agent's machine identity and fixed per-route scope mappings. The 100-entitlement user case above illustrates an identity policy for a deployment; the demo does not include a human login or user-entitlement directory. Fixture tests also check that exchanging a synthetic 100-scope subject token issues only the target's one scope.
 
 The examples use synthetic data and include a local identity service, TLS, and both A2A JSON-RPC and REST. [Run them locally →](examples/banking/README.md)
 
@@ -142,7 +144,7 @@ cd FOSS-AGENTIC-GATEWAY
 
 | Start here | Guide |
 | --- | --- |
-| Run the complete example | [Banking examples](examples/banking/README.md) |
+| Run the banking scenarios | [Banking examples](examples/banking/README.md) |
 | Contribute a fix or capability | [Contributing](CONTRIBUTING.md) |
 | Configure and deploy | [Gateway setup](docs/gateway/setup.md) |
 | Manage MCP connections | [Control-plane setup](docs/control-plane/setup.md) |
