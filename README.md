@@ -19,6 +19,44 @@ Identity configuration is vendor neutral. Auth0 is one documented OIDC provider 
 
 Upstream servers execute tools and agent tasks and own their protocol semantics and session lifecycle. The gateway enforces access and transport policy and proxies traffic; deploying it also requires configuring your issuer, upstream endpoints, TLS ingress, and backend access controls. See the [interoperability profile](docs/protocols/interoperability.md), [A2A guide](docs/protocols/a2a.md), and [token-exchange guide](docs/plugins/token-exchange.md) for supported behavior and limitations.
 
+## Why token exchange belongs at the gateway
+
+An agent should obtain permission to call a gateway endpoint. Each internal MCP server or A2A agent should receive a credential issued for its own resource and operations. Token exchange connects these two trust boundaries: the gateway validates the caller, and a trusted security token service (STS) authorizes and issues the credential for the next hop.
+
+This lets agents use public gateway endpoints while backend addresses, exchange credentials, and backend scope mappings stay in enterprise configuration. A credential accepted at the accounts endpoint should not grant access to the transactions server or the review agent. Each backend can enforce its own policy even after the gateway has admitted a request.
+
+```text
+Agent → Gateway          Token A: public endpoint audience + gateway scopes
+Gateway → Trusted STS    Token A as subject_token + gateway client authentication
+Trusted STS → Gateway    Token B: backend audience + authorized backend scopes
+Gateway → Backend        Token B; backend validates it before executing the request
+```
+
+The gateway verifies Token A's signature, trusted issuer, expiry, audience, and required scopes before requesting an exchange. Administrators choose the STS, backend resource, and requested scopes for each route. The STS must authorize that mapping; exchange is not permission to increase the caller's privileges. The original token goes to the trusted STS, while only Token B is forwarded to the backend. If exchange fails, the request is blocked.
+
+### Identity and permissions across the hop
+
+The intended backend identity policy preserves the original caller as the subject and identifies the gateway as the actor making the downstream call. This gives the backend both identities for authorization and attribution. For example, the banking STS issues:
+
+| Identity or permission | Agent → gateway | Gateway → accounts MCP server |
+| --- | --- | --- |
+| Subject (`sub`) | `banking-orchestrator` | `banking-orchestrator` |
+| Audience (`aud`) | `https://gateway:8443/mcp/accounts` | `urn:bank:backend:accounts` |
+| Scope (`scope`) | `accounts:read` | `accounts:summary` |
+| Actor (`act.sub`) | Not required on the incoming token | `banking-gateway` |
+
+Scope names can change across these boundaries because they describe different resources. The STS policy determines which backend permissions the caller may receive. The accounts token is rejected by the transactions server and by the review agent.
+
+[OAuth 2.0 Token Exchange (RFC 8693)](https://www.rfc-editor.org/rfc/rfc8693) defines the exchange protocol and delegation claims. Subject preservation and actor issuance depend on STS policy. Our [Python SDK backend verifier](sdk/python/README.md) explicitly requires the trusted issuer, backend audience, scopes, expiry, and signed gateway actor. The generic exchange plugin also accepts opaque backend tokens; those backends need their own validation mechanism. A JWT alone does not prove which OAuth grant issued it: enforcement relies on trusted issuance policy and validated claims.
+
+### One identity mechanism across protocols
+
+Token exchange is a generic OAuth plugin shared by MCP and A2A, including A2A JSON-RPC and REST. Protocol plugins validate incoming traffic and identity; the exchange plugin obtains the downstream credential; the backend authorizes the operation. OIDC administrator login is a separate control-plane concern, and an OIDC provider must also support RFC 8693 to act as this STS.
+
+Exchange is optional in the base gateway configuration and required by the banking examples' backend identity policy. Enable it on each route that crosses this credential boundary. Agents hold their own credentials; gateway STS credentials remain in mounted secrets. Restrict backend ingress to the gateway as well. Token exchange complements network isolation and backend authorization, while audit collection remains a separate deployment capability.
+
+See the [token-exchange setup guide](docs/plugins/token-exchange.md) and [runnable banking examples](examples/banking/README.md).
+
 ## Project layout
 
 ```text
