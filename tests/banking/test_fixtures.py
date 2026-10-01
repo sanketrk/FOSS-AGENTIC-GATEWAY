@@ -138,6 +138,18 @@ class BankingFixtures(unittest.TestCase):
         self.assertEqual(response['result']['message']['role'], 'ROLE_AGENT')
         self.assertEqual(response['result']['message']['metadata']['verified_upstream_identity']['actor'], EXCHANGE_ID)
 
+    def test_rest_message_requires_exchanged_token(self):
+        message = {'message': {'messageId': 'rest-demo', 'role': 'ROLE_USER', 'parts': [{'text': 'Review'}]}}
+        headers = {'Content-Type': 'application/json', 'A2A-Version': '1.0',
+                   'Authorization': 'Bearer ' + self.upstream_token('review')}
+        status, response = self.request('review', '/message:send', json.dumps(message).encode(), headers)
+        self.assertEqual(status, 200)
+        self.assertNotIn('jsonrpc', response)
+        self.assertEqual(response['message']['metadata']['verified_upstream_identity']['actor'], EXCHANGE_ID)
+        headers.pop('Authorization')
+        status, _ = self.request('review', '/message:send', json.dumps(message).encode(), headers)
+        self.assertEqual(status, 401)
+
     def test_sdk_token_acquisition_and_redirect_rejection(self):
         provider = OAuthClientCredentials(token_endpoint=self.urls['issuer'] + '/token', client_id=AGENT_ID,
             client_secret=(self.root / 'issuer' / 'agent-secret').read_text(), ca_file=str(self.root / 'client' / 'ca.pem'))

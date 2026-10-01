@@ -34,29 +34,38 @@ class DemoHandler(BaseHTTPRequestHandler):
                                "error": {"code": code, "message": text}})
 
 
-def backend_handler(verifier, dispatch, *, rpc_path, card=None):
+def backend_handler(verifier, dispatch, *, rpc_path, card=None, rest_dispatch=None):
     class Handler(DemoHandler):
         def do_GET(self):
             if card and self.path == "/.well-known/agent-card.json": return self.send(200, card())
             return super().do_GET()
 
         def do_POST(self):
-            if self.path != rpc_path: return self.send(404, {"error": "Not found"})
+            rest = rest_dispatch and self.path == "/message:send"
+            if self.path != rpc_path and not rest: return self.send(404, {"error": "Not found"})
+            def failure(status, text, headers=None):
+                if rest:
+                    names = {400: "INVALID_ARGUMENT", 401: "UNAUTHENTICATED", 415: "INVALID_ARGUMENT"}
+                    return self.send(status, {"error": {"code": status, "status": names[status], "message": text}}, headers)
+                return self.send(status, {"error": text}, headers)
             try:
                 # SDK authorization runs before any application method is invoked.
                 claims = verifier.verify(self.headers.get("Authorization"))
                 if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
-                    return self.send(415, {"error": "Use application/json"})
+                    return failure(415, "Use application/json")
                 message = json.loads(self.read_body())
+                if rest:
+                    if not isinstance(message, dict): raise ValueError("JSON object required")
+                    return rest_dispatch(self, message, claims)
                 if (not isinstance(message, dict) or message.get("jsonrpc") != "2.0"
                         or not isinstance(message.get("method"), str) or not isinstance(message.get("params", {}), dict)):
                     raise ValueError("Invalid RPC")
                 self.request_id = message.get("id")
                 return dispatch(self, message, claims)
             except AuthenticationError:
-                return self.send(401, {"error": "Exchanged gateway token required"}, {"WWW-Authenticate": "Bearer"})
+                return failure(401, "Exchanged gateway token required", {"WWW-Authenticate": "Bearer"})
             except (ValueError, TypeError, KeyError):
-                return self.send(400, {"error": "Invalid demo request"})
+                return failure(400, "Invalid demo request")
     return Handler
 
 

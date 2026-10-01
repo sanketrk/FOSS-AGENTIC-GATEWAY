@@ -11,6 +11,7 @@ services:
       - name: a2a-agent-a-jsonrpc
         paths:
           - "~/a2a/agent-a$"
+          - "~/a2a/agent-a/rest/"
           - "~/.well-known/agent-card.json$"
         strip_path: true
         path_handling: v0
@@ -20,6 +21,8 @@ services:
           - name: a2a
             config:
               rpc_path: /a2a/agent-a
+              rest_path: /a2a/agent-a/rest
+              upstream_rest_path: ""
               card_path: /.well-known/agent-card.json
               upstream_card_path: /.well-known/agent-card.json
               public_card: true

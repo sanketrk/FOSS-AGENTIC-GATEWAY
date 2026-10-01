@@ -6,6 +6,11 @@ return {
     { protocols = typedefs.protocols_http },
     { config = { type = "record", fields = {
       { rpc_path = { type = "string", required = true, match = "^/" } },
+      { rest_path = { type = "string", match = "^/[^?%%#]+[^/]$" } },
+      { upstream_rest_path = { type = "string", default = "", custom_validator = function(value)
+          if value == "" or value:match("^/[^?%%#]+[^/]$") then return true end
+          return nil, "Use an empty upstream mount or an absolute path without a trailing slash"
+        end } },
       { card_path = { type = "string", default = "/.well-known/agent-card.json", match = "^/" } },
       { upstream_card_path = { type = "string", default = "/.well-known/agent-card.json", match = "^/" } },
       { public_card = { type = "boolean", default = true } },

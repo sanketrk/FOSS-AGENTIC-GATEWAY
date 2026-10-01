@@ -78,4 +78,21 @@ reset(); claims.aud={config.audience}; claims.scope=nil; claims.scp={"a2a:access
 reset(); state.body=json.encode({jsonrpc="2.0",id=8,method="GetExtendedAgentCard",params={}}); state.headers.authorization=nil; expect(401)
 reset(); state.body=json.encode({jsonrpc="2.0",id=8,method="CustomExtension",params={}}); gateway:access(config); assert(not state.response)
 reset(); config.forward_bearer_token=true; gateway:access(config); assert(not state.cleared.authorization); config.forward_bearer_token=false
+config.rest_path="/a2a/agent-a/rest"; config.upstream_rest_path="/api"
+for _, operation in ipairs({{"/message:send","POST"}, {"/message:stream","POST"}, {"/tasks","GET"},
+  {"/tasks/t1","GET"}, {"/tasks/t1:cancel","POST"}, {"/tasks/t1:subscribe","POST"},
+  {"/tasks/t1/pushNotificationConfigs","GET"}, {"/tasks/t1/pushNotificationConfigs","POST"},
+  {"/tasks/t1/pushNotificationConfigs/c1","DELETE"}, {"/extendedAgentCard","GET"}}) do
+  reset(); state.path=config.rest_path..operation[1]; state.method=operation[2]; state.body="{}"
+  gateway:access(config); assert(not state.response and calls==1 and state.upstream_path=="/api"..operation[1])
+end
+reset(); state.path=config.rest_path.."/message:send"; state.body="{}"; state.headers.authorization=nil; expect(401)
+assert(state.response.body.error.status=="UNAUTHENTICATED")
+reset(); state.path=config.rest_path.."/tasks/t1"; state.method="GET"; state.headers.authorization=nil; expect(401)
+reset(); state.path=config.rest_path.."/message:send"; state.body="[]"; expect(400)
+reset(); state.path=config.rest_path.."/tasks"; state.method="POST"; expect(405)
+reset(); state.path=config.rest_path.."/unknown"; expect(404)
+reset(); state.path=config.rest_path.."/message:send"; state.body="{}"; state.headers["a2a-version"]="0.3"; expect(400)
+assert(state.response.body.error.details[1].reason=="VERSION_NOT_SUPPORTED")
+reset(); state.path=config.rest_path.."/message:send"; state.body="{}"; state.query["A2A-Version"]="1.0"; expect(400)
 print("A2A transport, discovery, versioning, and authentication checks passed.")

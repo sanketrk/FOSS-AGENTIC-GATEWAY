@@ -84,11 +84,14 @@ class Endpoint:
     audience: str
     scopes: tuple[str, ...]
     protocol: str
+    binding: str = "JSONRPC"
 
     def __post_init__(self):
         relative_path(self.path)
         if not self.audience or not self.scopes or self.protocol not in ("mcp", "a2a"):
             raise ValueError("Audience, scopes and MCP/A2A protocol are required")
+        if self.binding not in ("JSONRPC", "HTTP+JSON") or self.protocol == "mcp" and self.binding != "JSONRPC":
+            raise ValueError("REST binding is available only for A2A")
 
 
 class GatewayClient:
@@ -125,6 +128,18 @@ class GatewayClient:
     def send_message(self, endpoint, text):
         if endpoint.protocol != "a2a": raise ValueError("An A2A endpoint is required")
         token = self.token_provider.get_token(endpoint.audience, endpoint.scopes)
+        params = {"message": {"messageId": str(uuid.uuid4()), "role": "ROLE_USER", "parts": [{"text": text}]}}
+        if endpoint.binding == "HTTP+JSON":
+            if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9._~+/-]+=*", token):
+                raise GatewayError("Invalid agent access token")
+            status, data = self.transport.request(self.gateway_url + endpoint.path.rstrip("/") + "/message:send",
+                json.dumps(params).encode(), {"Content-Type": "application/json", "A2A-Version": "1.0",
+                                             "Authorization": "Bearer " + token})
+            if (status != 200 or not isinstance(data, dict) or "error" in data
+                    or sum(key in data for key in ("message", "task")) != 1
+                    or not isinstance(data.get("message", data.get("task")), dict)):
+                raise GatewayError("Invalid A2A REST response")
+            return data
         return self._rpc(endpoint, token, "SendMessage", {"message": {
             "messageId": str(uuid.uuid4()), "role": "ROLE_USER", "parts": [{"text": text}]}})
 

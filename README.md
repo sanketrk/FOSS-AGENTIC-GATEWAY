@@ -11,7 +11,7 @@ Agent clients → FOSS-AGENTIC-GATEWAY → Internal MCP servers / A2A agents
 Built on Kong Gateway OSS and OpenResty, the project provides:
 
 - **MCP gateway:** routes Streamable HTTP requests to multiple MCP servers, checks transport headers and JWT access tokens, publishes OAuth resource metadata, and forwards SSE streams.
-- **A2A gateway:** an optional plugin for Agent2Agent JSON-RPC HTTP traffic, Agent Cards, and SSE, configured on separate routes.
+- **A2A gateway:** an optional plugin for Agent2Agent JSON-RPC and A2A 1.0 REST traffic, Agent Cards, and SSE, configured on separate routes.
 - **Token exchange:** an optional protocol-neutral plugin that exchanges a verified gateway token for a separate upstream token through a trusted RFC 8693 security token service.
 - **Control plane:** an administrator UI and registration API with OIDC login, draft review, configuration export, and optional OpenShift/Kubernetes publication. It currently manages MCP registrations; A2A and token-exchange settings use deployment configuration.
 
@@ -46,7 +46,7 @@ cd FOSS-AGENTIC-GATEWAY
 | Component | Configuration and administration |
 | --- | --- |
 | MCP gateway | Default routes or control-plane registry publication |
-| A2A JSON-RPC gateway | Optional route configuration; upstream agents implement task semantics |
+| A2A JSON-RPC / REST gateway | Optional route configuration; upstream agents implement task semantics |
 | OAuth token exchange | Optional MCP or A2A route plugin with a trusted STS and mounted credentials |
 | Control plane | Generic OIDC login and MCP registry; A2A/exchange administration is not yet in the UI |
 

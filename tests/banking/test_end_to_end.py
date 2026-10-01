@@ -23,6 +23,8 @@ class GatewayIntegration(unittest.TestCase):
     def test_agent_to_agent_and_multiple_mcp_servers(self):
         review = self.agent.review_transaction()
         self.check_receipt('review', review['message']['metadata']['verified_upstream_identity'])
+        review_rest = self.agent.review_transaction('HTTP+JSON')
+        self.check_receipt('review', review_rest['message']['metadata']['verified_upstream_identity'])
         data = self.agent.account_overview(['accounts', 'transactions'])
         for name in data: self.check_receipt(name, data[name]['verified_upstream_identity'])
         self.assertTrue(data['accounts']['synthetic'])

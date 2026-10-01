@@ -53,7 +53,7 @@ docker compose -f examples/banking/compose.yml run --rm banking-orchestrator a2a
 
 The orchestrator fetches the public card at `/cards/transaction-review`, acquires a JWT for the gateway A2A audience, and sends `SendMessage` with `A2A-Version: 1.0`. The gateway exchanges that JWT for the review agent's resource and calls its private `/rpc` endpoint. The responder returns an A2A `SendMessageResponse.message` summarizing synthetic merchant purchase `DEMO-TX-003`.
 
-The example uses the [A2A 1.0 JSON-RPC HTTP binding](https://a2a-protocol.org/latest/specification/). Its card advertises the public gateway interface and Bearer JWT security. The card is anonymous and skips exchange; `SendMessage` is authenticated and exchanged. Streaming, task persistence, and push notifications are not part of this fixture.
+The example uses the JSON-RPC and HTTP+JSON/REST bindings of [A2A 1.0](https://a2a-protocol.org/latest/specification/). Its card advertises the public gateway interface and Bearer JWT security. The card is anonymous and skips exchange; `SendMessage` is authenticated and exchanged. Streaming, task persistence, and push notifications are not part of this fixture.
 
 ## 2. An agent calls one MCP server
 
@@ -133,3 +133,7 @@ The SDK client permits gateway-relative endpoints over verified HTTPS. Each back
 To adapt the examples, configure an exchange-capable OAuth authorization server with separate agent and gateway clients, map gateway audiences/scopes to backend resources/scopes, and replace the fixtures with your actual A2A agent and MCP servers. Configure the gateway with the real HTTPS discovery/token endpoints and trusted CA bundle. The STS and backend must agree on subject/actor claims and enforce their own authorization policies; an OIDC login provider alone does not establish token-exchange support.
 
 These routes are managed through `kong.yml`. The current control-plane publisher generates MCP-only configurations and would remove the manually configured exchange policies and A2A route. Do not publish over this example using the registry UI.
+
+A2A 1.0 synchronous SendMessage is available through JSON-RPC and HTTP+JSON/REST. Select `binding="HTTP+JSON"` on the SDK A2A `Endpoint` and use the advertised REST base path; the token audience stays the agent gateway audience. Token exchange and backend verification are identical for both bindings.
+
+Run the REST banking scenario: `docker compose -f examples/banking/compose.yml run --rm banking-orchestrator a2a-rest`. The `all` scenario runs both bindings.

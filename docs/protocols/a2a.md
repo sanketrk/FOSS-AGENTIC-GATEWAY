@@ -1,6 +1,6 @@
 # FOSS-AGENTIC-GATEWAY: A2A plugin
 
-The optional `a2a` Kong OSS plugin proxies the **JSON-RPC HTTP binding** of the [Agent2Agent protocol](https://a2a-protocol.org/latest/specification/), originally introduced by Google. It remains vendor neutral. It supports transport profiles `1.0` and legacy `0.3`; it is not a complete A2A agent, protocol translator, or certification claim. gRPC and HTTP+JSON/REST bindings are not implemented.
+The optional `a2a` Kong OSS plugin proxies the **JSON-RPC and A2A 1.0 HTTP+JSON/REST bindings** of the [Agent2Agent protocol](https://a2a-protocol.org/latest/specification/), originally introduced by Google. It remains vendor neutral. It supports transport profiles `1.0` and legacy `0.3`; it is not a complete A2A agent, protocol translator, or certification claim. gRPC is not implemented.
 
 ## Configuration
 
@@ -32,3 +32,19 @@ curl -i https://agents.example.com/a2a/agent-a \
 The second request should receive 401 without credentials. With an appropriately scoped access token, a real upstream interprets the request and returns its task or protocol error. Streaming calls require that upstream's streaming capability and version-specific method. Tests exercise gateway validation and configuration loading; complete SDK/agent interoperability still requires a live upstream and issuer.
 
 The current control-plane registry manages MCP servers only. Its publication regenerates MCP routes and removes manually merged A2A routes; manage combined configurations through deployment tooling until registry support is extended. The local cluster's existing deployment is unchanged by adding this optional plugin to source.
+
+## A2A 1.0 REST binding
+
+Set `rest_path` to a public base path without a trailing slash (for example `/a2a/agent-a/rest`) and add `~/a2a/agent-a/rest/` to the Kong route paths. The plugin strips this public prefix and sends the operation to `upstream_rest_path` (default empty). Thus `POST /a2a/agent-a/rest/message:send` reaches `POST /message:send` on the agent, independently of the service's JSON-RPC `/rpc` path. Query parameters remain unchanged.
+
+Advertise a second `supportedInterfaces` entry with `protocolBinding: HTTP+JSON`, `protocolVersion: "1.0"`, and the public REST base URL. Both bindings use the same agent audience, required scopes, and optional token-exchange plugin. REST requests require `A2A-Version: 1.0` in the header; the legacy 0.3 binding is JSON-RPC only in this gateway profile.
+
+The gateway recognizes message send/stream, task get/list/cancel/subscribe, push-notification configuration create/get/list/delete, and authenticated `/extendedAgentCard` routes. It validates their HTTP methods and JSON objects on POST, authenticates every operation, then proxies payloads and responses without converting bindings. REST validation errors use an HTTP status and `error` status object; A2A-specific errors carry `google.rpc.ErrorInfo`. Encoded identifiers and dot paths are rejected by this initial route profile. Tenant-prefixed REST paths are not supported. Upstreams own operation semantics, task ownership and capabilities; SSE stays unbuffered. The banking example implements synchronous SendMessage only, and the Python SDK supports that REST operation only.
+
+```python
+endpoint = Endpoint(path="/a2a/agent-a/rest", audience="https://agents.example.com/a2a/agent-a",
+                    scopes=("a2a:access",), protocol="a2a", binding="HTTP+JSON")
+result = gateway.send_message(endpoint, "Review a synthetic transaction")
+```
+
+Binding reference: [A2A 1.0 HTTP+JSON/REST specification](https://a2a-protocol.org/v1.0.0/specification/#11-httpjsonrest-protocol-binding).

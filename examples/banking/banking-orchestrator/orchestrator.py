@@ -17,16 +17,16 @@ class BankingOrchestrator:
         self.gateway = GatewayClient(gateway_url=GATEWAY, token_provider=provider, ca_file=ca)
 
     @staticmethod
-    def endpoint(name):
+    def endpoint(name, binding="JSONRPC"):
         p = POLICIES[name]
-        return Endpoint(path=p["path"], audience=p["audience"], scopes=(p["gateway_scope"],),
-                        protocol="a2a" if name == "review" else "mcp")
+        return Endpoint(path=p["path"] + ("/rest" if binding == "HTTP+JSON" else ""), audience=p["audience"], scopes=(p["gateway_scope"],),
+                        protocol="a2a" if name == "review" else "mcp", binding=binding)
 
-    def review_transaction(self):
+    def review_transaction(self, binding="JSONRPC"):
         card = self.gateway.agent_card("/cards/transaction-review")
-        expected = {"url": POLICIES["review"]["audience"], "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}
+        expected = {"url": POLICIES["review"]["audience"] + ("/rest" if binding == "HTTP+JSON" else ""), "protocolBinding": binding, "protocolVersion": "1.0"}
         if expected not in card.get("supportedInterfaces", []): raise ValueError("Unexpected review-agent interface")
-        return self.gateway.send_message(self.endpoint("review"), "Summarize synthetic merchant purchase DEMO-TX-003.")
+        return self.gateway.send_message(self.endpoint("review", binding), "Summarize synthetic merchant purchase DEMO-TX-003.")
 
     def account_overview(self, servers):
         results = {}
@@ -39,13 +39,15 @@ class BankingOrchestrator:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("scenario", choices=("a2a", "mcp", "all"))
+    parser.add_argument("scenario", choices=("a2a", "a2a-rest", "mcp", "all"))
     parser.add_argument("servers", nargs="*", metavar="SERVER", help="accounts and/or transactions")
     args = parser.parse_args()
     if set(args.servers) - {"accounts", "transactions"}: parser.error("servers must be accounts or transactions")
     agent = BankingOrchestrator(os.environ.get("DEMO_CREDENTIALS", "/credentials"))
     if args.scenario in ("a2a", "all"):
         print(json.dumps({"scenario": "agent-to-agent", "response": agent.review_transaction()}, indent=2))
+    if args.scenario in ("a2a-rest", "all"):
+        print(json.dumps({"scenario": "agent-to-agent-rest", "response": agent.review_transaction("HTTP+JSON")}, indent=2))
     if args.scenario in ("mcp", "all"):
         print(json.dumps({"scenario": "agent-to-mcp", "servers": agent.account_overview(args.servers or ["accounts", "transactions"])}, indent=2))
 

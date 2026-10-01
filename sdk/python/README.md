@@ -77,3 +77,5 @@ The banking fixture's `token_use` and `verified_upstream_identity` receipt are d
 Version `0.1.0` provides synchronous A2A 1.0 `SendMessage`/public card reads and MCP 2025-11-25 stateless initialization, metadata checks, tool discovery and calls, with JSON responses. It is a small gateway SDK, not a replacement for a complete protocol SDK. SSE, resumable or stateful MCP sessions, A2A task lifecycle, async clients, and automatic token/key refresh are outside this initial profile. The backend verifier uses an explicitly supplied public signing JWKS with distinct `kid` values; reload trusted keys when your issuer rotates them. Opaque backend tokens need a different verifier and are not supported by this JWT guard.
 
 See the [four banking components](../../examples/banking/README.md) for runnable Docker images and complete middleware integration.
+
+A2A 1.0 synchronous SendMessage is available through JSON-RPC and HTTP+JSON/REST. Select `binding="HTTP+JSON"` on the SDK A2A `Endpoint` and use the advertised REST base path; the token audience stays the agent gateway audience. Token exchange and backend verification are identical for both bindings.

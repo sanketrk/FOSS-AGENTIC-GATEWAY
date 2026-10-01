@@ -12,6 +12,7 @@ services:
         paths:
           - "~/a2a/transaction-review$"
           - "~/cards/transaction-review$"
+          - "~/a2a/transaction-review/rest/"
         strip_path: true
         path_handling: v0
         request_buffering: false
@@ -20,6 +21,7 @@ services:
           - name: a2a
             config:
               rpc_path: /a2a/transaction-review
+              rest_path: /a2a/transaction-review/rest
               card_path: /cards/transaction-review
               upstream_card_path: /.well-known/agent-card.json
               public_card: true

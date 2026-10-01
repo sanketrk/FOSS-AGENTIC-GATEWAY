@@ -35,3 +35,12 @@ for path in ("/a2a/agent-a/", "/a2a/agent-ab", "/a2a/unknown"):
     status, _, payload = request(path, body, "1.0")
     assert status == 404, (path, status, payload)
 print("Real Kong A2A routing, versioning, and authentication checks passed.")
+
+status, _, payload = request('/a2a/agent-a/rest/message:send', b'{"message":{}}', '1.0')
+assert status == 401 and json.loads(payload)['error']['status'] == 'UNAUTHENTICATED', (status, payload)
+status, _, payload = request('/a2a/agent-a/rest/tasks/task-1', version='1.0')
+assert status == 401, (status, payload)
+status, _, payload = request('/a2a/agent-a/rest/extendedAgentCard', version='1.0')
+assert status == 401, (status, payload)
+status, _, payload = request('/a2a/agent-a/rest/message:send', b'{}', '0.3')
+assert status == 400 and json.loads(payload)['error']['details'][0]['reason'] == 'VERSION_NOT_SUPPORTED'

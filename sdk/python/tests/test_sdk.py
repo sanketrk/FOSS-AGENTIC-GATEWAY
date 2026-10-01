@@ -115,5 +115,23 @@ class GatewayClientTests(unittest.TestCase):
         with patch.object(self.client.transport, 'request', side_effect=response), self.assertRaises(GatewayError):
             self.client.send_message(endpoint, 'review')
 
+    def test_rest_message_uses_plain_json_and_same_gateway_grant(self):
+        endpoint = Endpoint(path='/a2a/review/rest', audience='urn:gateway:review', scopes=('review',),
+                            protocol='a2a', binding='HTTP+JSON')
+        def response(url, data, headers):
+            self.assertEqual(url, 'https://gateway.example/a2a/review/rest/message:send')
+            self.assertEqual(headers['Authorization'], 'Bearer gateway-access-token')
+            self.assertEqual(headers['A2A-Version'], '1.0')
+            body = json.loads(data)
+            self.assertNotIn('jsonrpc', body)
+            self.assertEqual(body['message']['role'], 'ROLE_USER')
+            return 200, {'message': {'role': 'ROLE_AGENT'}}
+        with patch.object(self.client.transport, 'request', side_effect=response):
+            self.assertEqual(self.client.send_message(endpoint, 'review')['message']['role'], 'ROLE_AGENT')
+        self.assertEqual(self.grants, [(endpoint.audience, endpoint.scopes)])
+        for invalid in ({'message': {}, 'task': {}}, {'jsonrpc': '2.0', 'result': {}}, {'error': {}}):
+            with patch.object(self.client.transport, 'request', return_value=(200, invalid)), self.assertRaises(GatewayError):
+                self.client.send_message(endpoint, 'review')
+
 
 if __name__ == '__main__': unittest.main()
