@@ -51,18 +51,66 @@ The control plane manages MCP, A2A, and token-exchange settings in one publicati
 
 ## How an agent uses the gateway
 
-An agent connects only to the gateway. It does not need the private address or credentials of another agent or MCP server.
+The intended application architecture uses the SDK at both ends of a connection:
 
-1. An administrator registers the target in the control plane and chooses its protocol, public path, required caller scope, and optional token-exchange policy.
-2. The calling agent creates an SDK `Endpoint` for that public path and asks its identity provider for a gateway token.
-3. The SDK sends the A2A or MCP request to Open Agentic Gateway.
-4. The gateway verifies the caller token. When token exchange is enabled, it asks the trusted identity service for a new token limited to the selected backend, audience, and scopes.
-5. The target verifies the exchanged token and executes the request. It never receives the caller's original broad token.
+- The **calling agent** uses `GatewayClient` to call another agent over A2A or invoke an MCP tool through the gateway.
+- The **receiving agent or MCP server** uses `ExchangeTokenVerifier` before executing business logic.
 
-```text
-Calling agent  →  Open Agentic Gateway  →  Target agent or MCP server
- caller token       verify + exchange          limited target token
+The SDK is a convenience and policy-enforcement library, not a proprietary wire protocol. A standards-compatible A2A or MCP client can call the gateway without it, and a backend can use another JWT library if it enforces the same issuer, audience, scope, actor, signature, and expiry checks.
+
+### Who decides the scope and who creates the token?
+
+The gateway does not invent a scope from the request, and it does not sign tokens.
+
+| Responsibility | Component |
+| --- | --- |
+| Register the target and configure its required caller scope | Administrator through the control plane |
+| Map that route to a backend resource and backend scopes | Token-exchange policy stored with the route |
+| Obtain a token for calling the public gateway endpoint | Calling agent, normally through `GatewayClient` and its token provider |
+| Verify the caller token and select the registered route | Gateway `a2a` or `mcp` plugin |
+| Request a target-specific token using the route policy | Gateway `token-exchange` plugin |
+| Authorize the exchange and mint the new token | Trusted identity service or Security Token Service (STS) |
+| Verify the exchanged token before execution | Receiving agent or MCP server, normally through `ExchangeTokenVerifier` |
+
+For example, the transaction-review route has an explicit mapping:
+
+| Policy value | Example |
+| --- | --- |
+| Public gateway endpoint | `/a2a/transaction-review` |
+| Caller token audience | `https://gateway.example.com/a2a/transaction-review` |
+| Caller must have | `a2a:review` |
+| Exchange target | `urn:bank:backend:transaction-review` |
+| New token receives | `review:execute` |
+
+The request then follows these exact steps:
+
+1. `GatewayClient.send_message()` asks the configured token provider for a caller token containing the gateway audience and `a2a:review`.
+2. The SDK sends the A2A request and caller token to `/a2a/transaction-review` on Open Agentic Gateway.
+3. The `a2a` plugin verifies the caller token and makes the verified identity available to the `token-exchange` plugin.
+4. The `token-exchange` plugin reads the route's configured target and scopes. It sends the caller token, `urn:bank:backend:transaction-review`, and `review:execute` to the STS using RFC 8693.
+5. The STS decides whether the caller may receive that access. If allowed, **the STS mints and signs** a new token limited to the transaction-review agent.
+6. The gateway replaces the outbound bearer token with the new token and forwards the original A2A request.
+7. The receiving agent verifies the new token with `ExchangeTokenVerifier` and then executes the request.
+
+```mermaid
+sequenceDiagram
+    participant Caller as Calling agent<br/>GatewayClient
+    participant Gateway as Open Agentic Gateway<br/>A2A + token-exchange
+    participant STS as Identity service / STS
+    participant Target as Receiving agent<br/>ExchangeTokenVerifier
+    Caller->>Caller: Obtain gateway token<br/>audience: public A2A endpoint<br/>scope: a2a:review
+    Caller->>Gateway: A2A request + caller token
+    Gateway->>Gateway: Select route and verify caller token
+    Gateway->>STS: RFC 8693 exchange request<br/>target: transaction-review<br/>scope: review:execute
+    STS->>STS: Check caller entitlement
+    STS-->>Gateway: Mint and return limited target token
+    Gateway->>Target: Original A2A request + limited token
+    Target->>Target: Verify signature, issuer, audience,<br/>actor, expiry, and review:execute
+    Target-->>Gateway: A2A response
+    Gateway-->>Caller: A2A response
 ```
+
+The receiving agent never sees the original caller token or unrelated caller permissions.
 
 Install the SDK directly from this repository while it is under development:
 
@@ -103,7 +151,7 @@ response = gateway.send_message(
 )
 ```
 
-`send_message()` obtains the caller token and sends an A2A 1.0 JSON-RPC request through the gateway. For the banking policy, the gateway exchanges that token for one with:
+`send_message()` obtains the caller token and sends an A2A 1.0 JSON-RPC request through the gateway. The token-exchange plugin requests the route's configured target access, and the STS returns a newly signed token with:
 
 ```text
 subject:  banking-orchestrator
@@ -145,7 +193,7 @@ account = gateway.call_tool(
 )
 ```
 
-An agent can call several MCP servers with separate endpoint policies. It receives a different gateway token for each audience, and the gateway obtains a different downscoped backend token for each target:
+An agent can call several MCP servers with separate endpoint policies. It receives a different gateway token for each audience, and the token-exchange plugin asks the STS for a different downscoped backend token for each target:
 
 ```python
 transactions = Endpoint(
@@ -163,7 +211,7 @@ The accounts server receives only `accounts:summary` for `urn:bank:backend:accou
 
 ### The target verifies the exchanged token
 
-The receiving agent or MCP server uses the SDK verifier before dispatching business logic:
+The receiving agent or MCP server uses the SDK verifier before dispatching business logic. This is where the target enforces that the STS signed the token for this exact audience and scope and named the expected gateway actor:
 
 ```python
 from open_agentic_gateway import ExchangeTokenVerifier

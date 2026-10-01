@@ -2,6 +2,8 @@
 
 This package provides gateway-only MCP/A2A clients and a backend JWT verifier that requires the configured token-exchange identity policy. The banking examples use it in both agents and both MCP servers.
 
+The calling side uses `GatewayClient`; the receiving side uses `ExchangeTokenVerifier`. The gateway's protocol plugin verifies the caller token, the token-exchange plugin requests the route's configured backend access, and the trusted STS—not the gateway—authorizes and mints the limited target token. See the [complete request flow](../../README.md#how-an-agent-uses-the-gateway).
+
 ```sh
 python -m pip install ./sdk/python
 ```
