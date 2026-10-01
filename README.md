@@ -1,10 +1,10 @@
-# FOSS-AGENTIC-GATEWAY
+# Open Agentic Gateway
 
 **Build the gateway your agents need. Share the capabilities everyone can use.**
 
 AI agents need tools, other agents, and permission to act. As workflows grow, teams also need to understand what happened across those connections, control usage, and decide where requests should go. These shared concerns recur across projects.
 
-FOSS-AGENTIC-GATEWAY is a place to solve those problems together. It provides an open gateway built on Kong OSS, with reusable plugins for MCP, A2A, and token exchange. Run it for your own workflows, improve an existing capability, or contribute the next plugin.
+Open Agentic Gateway is a place to solve those problems together. It provides an open gateway built on Kong OSS, with reusable plugins for MCP, A2A, and token exchange. Run it for your own workflows, improve an existing capability, or contribute the next plugin.
 
 **Have a shared problem across your agents? Build a plugin here.** Tracing agent-to-agent calls, enforcing usage budgets, discovering tools, or choosing an LLM are examples of capabilities the community could contribute. Today's working foundation covers MCP, A2A, and token exchange.
 
@@ -14,7 +14,7 @@ FOSS-AGENTIC-GATEWAY is a place to solve those problems together. It provides an
 
 Kong OSS gives developers an extensible gateway foundation. Several capabilities needed for AI and agent workflows—including Kong's [AI MCP Proxy](https://developer.konghq.com/plugins/ai-mcp-proxy/), [AI A2A Proxy](https://developer.konghq.com/plugins/ai-a2a-proxy/), and [AI Proxy Advanced](https://developer.konghq.com/plugins/ai-proxy-advanced/)—require a commercial AI license. They are separate from the plugins available in Kong OSS.
 
-**That gap is the motivation for FOSS-AGENTIC-GATEWAY: build AI and agent gateway capabilities that the community can use, inspect, improve, and share as open source.**
+**That gap is the motivation for Open Agentic Gateway: build AI and agent gateway capabilities that the community can use, inspect, improve, and share as open source.**
 
 We are building independent Apache-2.0 plugins on Kong OSS. MCP, A2A, and token exchange are the starting point. Agent-to-agent observability, access policy, usage controls, discovery, and routing are opportunities to build together. When someone solves a shared problem here, other teams can reuse and extend that contribution.
 

@@ -1,4 +1,4 @@
-# FOSS-AGENTIC-GATEWAY: A2A plugin
+# Open Agentic Gateway: A2A plugin
 
 The optional `a2a` Kong OSS plugin proxies the **JSON-RPC and A2A 1.0 HTTP+JSON/REST bindings** of the [Agent2Agent protocol](https://a2a-protocol.org/latest/specification/), originally introduced by Google. It remains vendor neutral. It supports transport profiles `1.0` and legacy `0.3`; it is not a complete A2A agent, protocol translator, or certification claim. gRPC is not implemented.
 

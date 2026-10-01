@@ -1,4 +1,4 @@
-"""FOSS-AGENTIC-GATEWAY administrator registry and Kong publisher."""
+"""Open Agentic Gateway administrator registry and Kong publisher."""
 import hashlib
 import hmac
 import json

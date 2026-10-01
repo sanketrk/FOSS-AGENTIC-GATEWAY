@@ -1,4 +1,4 @@
-# Contributing to FOSS-AGENTIC-GATEWAY
+# Contributing to Open Agentic Gateway
 
 Help make agent connections a reusable part of the open-source ecosystem. Contributions can be plugins, bug fixes, protocol interoperability reports, SDK improvements, deployment guides, or working examples.
 

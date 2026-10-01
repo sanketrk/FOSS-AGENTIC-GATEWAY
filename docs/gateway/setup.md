@@ -1,6 +1,6 @@
 # Gateway setup and operations
 
-Build, configuration, deployment, and validation details for FOSS-AGENTIC-GATEWAY. Commands run from the repository root. Start with the [project overview](../../README.md) for the purpose and scope.
+Build, configuration, deployment, and validation details for Open Agentic Gateway. Commands run from the repository root. Start with the [project overview](../../README.md) for the purpose and scope.
 
 ## Features
 

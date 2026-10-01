@@ -1,4 +1,4 @@
-# FOSS-AGENTIC-GATEWAY: token exchange
+# Open Agentic Gateway: token exchange
 
 The `token-exchange` Kong OSS plugin implements outbound [RFC 8693 token exchange](https://www.rfc-editor.org/rfc/rfc8693). Enable it on an MCP or A2A route alongside `mcp` or `a2a`. It is vendor neutral and inactive by default.
 

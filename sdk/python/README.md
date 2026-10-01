@@ -1,4 +1,4 @@
-# FOSS-AGENTIC-GATEWAY Python SDK
+# Open Agentic Gateway Python SDK
 
 This package provides gateway-only MCP/A2A clients and a backend JWT verifier that requires the configured token-exchange identity policy. The banking examples use it in both agents and both MCP servers.
 

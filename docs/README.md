@@ -1,4 +1,4 @@
-# FOSS-AGENTIC-GATEWAY documentation
+# Open Agentic Gateway documentation
 
 | Guide | Contents |
 | --- | --- |

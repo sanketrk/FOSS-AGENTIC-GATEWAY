@@ -1,6 +1,6 @@
 # Banking examples: agents, MCP, and token exchange
 
-Run a banking orchestrator through FOSS-AGENTIC-GATEWAY in three ways:
+Run a banking orchestrator through Open Agentic Gateway in three ways:
 
 1. **Agent → agent:** request a transaction summary from an A2A transaction-review agent.
 2. **Agent → one MCP server:** call `get_account_summary` on the account service.

@@ -1,6 +1,6 @@
-# FOSS-AGENTIC-GATEWAY control plane
+# Open Agentic Gateway control plane
 
-The FOSS-AGENTIC-GATEWAY administrator service provides a persistent MCP server registry, authenticated JSON API, and browser UI. Python and SQLite keep it small; PyJWT and cryptography verify signed tokens. Agents connect to the gateway, not this administrator service. The current UI/API manages MCP registrations; A2A and exchange policies are configured separately in gateway deployment files.
+The Open Agentic Gateway administrator service provides a persistent MCP server registry, authenticated JSON API, and browser UI. Python and SQLite keep it small; PyJWT and cryptography verify signed tokens. Agents connect to the gateway, not this administrator service. The current UI/API manages MCP registrations; A2A and exchange policies are configured separately in gateway deployment files.
 
 ## OIDC login
 

@@ -1,4 +1,4 @@
-name: Validate FOSS Agentic Gateway
+name: Validate Open Agentic Gateway
 
 on:
   push:

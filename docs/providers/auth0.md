@@ -1,4 +1,4 @@
-# FOSS-AGENTIC-GATEWAY: optional Auth0 setup
+# Open Agentic Gateway: optional Auth0 setup
 
 The application uses a generic OIDC client. This guide supplies an Auth0 configuration through the same `OIDC_*` settings available for other providers. The core code, default environment template, UI, and deployment have no Auth0-specific dependency.
 

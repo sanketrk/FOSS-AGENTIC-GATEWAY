@@ -1,4 +1,4 @@
-# FOSS-AGENTIC-GATEWAY interoperability profile
+# Open Agentic Gateway interoperability profile
 
 This project is a transport-aware MCP gateway and a separate administrator control plane. Protocols are provider-neutral; Kong is the chosen proxy implementation, and OpenShift is an optional deployment target. Identity-provider selection does not require changing code. The two authentication roles are distinct:
 
