@@ -559,4 +559,14 @@ test("per-server audiences and scopes reject tokens for another server", functio
   current_claims = { iss = "https://issuer.example.com/", aud = "https://mcp.example.com/mcp", scope = "mcp:access" }
 end)
 
+test("only authorized tokens enter exchange context", function()
+  request()
+  assert(kong.ctx.shared.mcp_verified_access_token == "header.issuer11.signature")
+  assert(kong.ctx.shared.mcp_verified_resource == config.resource_url)
+  current_claims = { iss = "https://issuer.example.com/", aud = "wrong", scope = "mcp:access" }
+  expect_status("unauthorized exchange subject", 401)
+  assert(not kong.ctx.shared.mcp_verified_access_token)
+  current_claims = { iss = "https://issuer.example.com/", aud = config.audience, scope = "mcp:access" }
+end)
+
 io.write("1..", passed, "\n")

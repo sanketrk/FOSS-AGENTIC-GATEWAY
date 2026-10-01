@@ -461,6 +461,9 @@ function Gateway:access(conf)
     })
   end
 
+  -- Only a verified, resource-bound and authorized token may be exchanged.
+  kong.ctx.shared.mcp_verified_access_token = token
+  kong.ctx.shared.mcp_verified_resource = conf.resource_url
   if not conf.forward_bearer_token then
     kong.service.request.clear_header("Authorization")
   end

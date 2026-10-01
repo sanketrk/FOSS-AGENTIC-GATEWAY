@@ -25,6 +25,8 @@ Each MCP server is a separate protected resource with its own canonical public H
 
 JWT access tokens are verified against explicitly configured issuer/discovery pairs, allowed algorithms, expiry, audience, and required scopes. Opaque MCP access tokens are not supported by this profile. Resource metadata, 401 challenges, and insufficient-scope responses support OAuth discovery and step-up flows. Token forwarding is disabled by default; any opt-in forwarding must remain within the same protected-resource trust boundary and must not forward a token to an unrelated API. Enforce backend network isolation separately.
 
+An optional [RFC 8693 exchange plugin](TOKEN_EXCHANGE.md) obtains separate backend tokens after incoming-token validation. It requires an explicitly trusted STS; issued tokens are validated by the backend.
+
 No universal MCP conformance or provider certification is claimed. Live tests still need a conforming agent, authorization server, and upstream MCP server. Unit/runtime tests validate this gateway's implemented boundaries.
 
 References: [MCP Streamable HTTP](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http), [MCP authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization), [resource indicators](https://www.rfc-editor.org/rfc/rfc8707), [protected-resource metadata](https://www.rfc-editor.org/rfc/rfc9728), [bearer tokens](https://www.rfc-editor.org/rfc/rfc6750).

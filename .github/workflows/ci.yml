@@ -17,6 +17,17 @@ jobs:
           python3 -m pip install -r control-plane/requirements.txt
           python3 -m unittest discover -s control-plane -v
           PYTHONPATH=control-plane python3 -c 'import json; from app import generate, validate; from test_app import sample; open("tests/generated-kong.json", "w").write(json.dumps(generate([validate(sample())], "https://mcp.example.com")))'
+          PYTHONPATH=control-plane python3 - <<'PY'
+          import json
+          from app import generate, validate
+          from test_app import sample
+          config = generate([validate(sample())], "https://mcp.example.com")
+          config["services"][0]["routes"][0]["plugins"].append({"name": "mcp-token-exchange", "config": {
+              "token_endpoint": "https://sts.example.com/token", "gateway_resource": "https://mcp.example.com/mcp/server-a",
+              "resource": "https://backend.example.com/mcp", "client_id": "gateway-client",
+              "client_secret_file": "/var/run/secrets/token-exchange/client-secret", "scopes": ["tools:read"]}})
+          with open("tests/exchange-kong.json", "w") as output: json.dump(config, output)
+          PY
           node --check control-plane/static/app.js
           sh -n tests/smoke.sh
           ruby tests/validate-config.rb
@@ -38,6 +49,8 @@ jobs:
           docker run --rm --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m \
             --user 12345:0 --volume "$PWD/tests:/tests:ro" --entrypoint /bin/sh mcp-gateway:ci -ec '
               luajit /tests/handler_spec.lua
+              luajit /tests/token_exchange_spec.lua
+              kong config parse /tests/exchange-kong.json >/dev/null
               kong config parse /etc/kong/kong.yml >/dev/null
               kong config parse /tests/generated-kong.json >/dev/null
               kong prepare

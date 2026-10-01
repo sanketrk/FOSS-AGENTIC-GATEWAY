@@ -9,4 +9,5 @@ __pycache__/
 *.sqlite3
 *.sqlite3-*
 tests/generated-kong.json
+tests/exchange-kong.json
 .venv/
