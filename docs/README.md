@@ -2,7 +2,8 @@
 
 | Guide | Contents |
 | --- | --- |
-| [Project overview](../README.md) | Enterprise value, examples, scope, and getting started |
+| [Project overview](../README.md) | Community and enterprise value, examples, and contribution ideas |
+| [Contributing](../CONTRIBUTING.md) | Plugin development, proposals, testing, and pull requests |
 | [Gateway setup](gateway/setup.md) | Configuration, build, OpenShift deployment, and smoke checks |
 | [Control-plane setup](control-plane/setup.md) | Generic OIDC, registry API/UI, and publication |
 | [Optional Auth0 setup](providers/auth0.md) | Application/API grants, roles, callbacks, and troubleshooting |
