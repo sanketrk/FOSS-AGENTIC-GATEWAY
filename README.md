@@ -25,34 +25,6 @@ This repository gives contributors a starting point: a working gateway, three pl
 
 The aim is an open collection of useful gateway capabilities that grows through contributions. The current project is a starting point you can use and extend.
 
-```mermaid
-flowchart LR
-    callerAgent["Caller agent"]
-    subgraph gatewayProcess["FOSS-AGENTIC-GATEWAY"]
-        verifyCaller["Verify caller and select target"]
-        exchangePlugin["Token-exchange plugin"]
-        forwardCall["Forward request with new token"]
-        verifyCaller --> exchangePlugin
-        exchangePlugin -->|"Target token received"| forwardCall
-    end
-    identityService["Trusted identity service"]
-    calleeAgent["Callee agent: verify token, then execute"]
-    mcpServer["MCP server: verify token, then execute"]
-    callerAgent -->|"Request and caller token"| verifyCaller
-    exchangePlugin -->|"Request target audience and only required scopes"| identityService
-    identityService -->|"Authorize and mint a new limited token"| exchangePlugin
-    forwardCall -->|"A2A request and target-only token"| calleeAgent
-    forwardCall -->|"MCP request and target-only token"| mcpServer
-    classDef caller fill:#eff6ff,stroke:#2563eb,color:#172554
-    classDef gateway fill:#eef2ff,stroke:#6366f1,color:#312e81
-    classDef target fill:#ecfdf5,stroke:#059669,color:#064e3b
-    class callerAgent caller
-    class verifyCaller,exchangePlugin,forwardCall gateway
-    class identityService,calleeAgent,mcpServer target
-```
-
-*This flow shows authenticated calls with token exchange enabled. The plugin runs inside the gateway. The identity service mints the token; the gateway sends it to the selected callee.*
-
 ## What is available today?
 
 | Component | What you can do |
